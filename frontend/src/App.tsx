@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { chapters, sampleMemories, type ChapterId } from './data'
 import { Hero } from './components/Hero'
+import { SpiralGallery } from './components/SpiralGallery'
 import './App.css'
 
 function App() {
@@ -23,7 +24,10 @@ function App() {
       )}
 
       {chapter.id === 'welcome' ? (
-        <Hero />
+        <div className="welcome-section">
+          <Hero />
+          <SpiralGallery />
+        </div>
       ) : (
         <section className="chapter">
           <p className="eyebrow">{chapter.title}</p>

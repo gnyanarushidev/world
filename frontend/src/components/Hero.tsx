@@ -42,10 +42,23 @@ export function Hero() {
       <audio
         ref={musicRef}
         src={heroMusic}
+        autoPlay
         loop
         onPause={() => setIsPlaying(false)}
         onPlay={() => setIsPlaying(true)}
       />
+      <div className="hero-birthday">
+        <span>🎉</span>
+        Happy Birthday MADAM
+        <span>🌟</span>
+      </div>
+      <div className="hero-quote-wrap">
+        <span className="hero-emoji">✨</span>
+        <div className="hero-quote">
+          "You're the person through whose eyes I've seen the world differently."
+        </div>
+        <span className="hero-emoji hero-emoji-end">🌙</span>
+      </div>
       <button
         className="music-toggle"
         type="button"
