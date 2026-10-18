@@ -29,7 +29,7 @@ export const DEFAULT_CONFIG: SpiralGalleryConfig = {
   imageCount: 36,
   radius: 7,
   imagesPerTurn: 7,
-  verticalSpacing: 0.72,
+  verticalSpacing: 1.2,
   baseCardHeight: 2.45,
   heightVariance: 0.45,
   rotationSpeed: 0.06,

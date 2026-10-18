@@ -194,10 +194,10 @@ function PhotoCard({
         map={texture}
         color="#ffffff"
         side={THREE.DoubleSide}
-        roughness={0.5}
+        roughness={0.35}
         metalness={0}
-        emissive={0xfff8ee}
-        emissiveIntensity={0.42}
+        emissive={0xffffff}
+        emissiveIntensity={0.8}
       />
       <Edges
         threshold={15}
@@ -301,12 +301,12 @@ function SpiralStage({ images, selectedIndex, onSelect, manualRotation, config, 
 
   return (
     <>
-      <fog args={['#f4f1ea', 9, 34]} />
+      <fog args={['#f4f1ea', 12, 42]} />
 
       {/* Warm key light from above */}
       <pointLight
         position={[5, 9, 4]}
-        intensity={2}
+        intensity={3}
         color="#fff8ee"
         decay={1.5}
         distance={40}
@@ -315,13 +315,13 @@ function SpiralStage({ images, selectedIndex, onSelect, manualRotation, config, 
       {/* Warm fill light from below */}
       <pointLight
         position={[-6, -2, 6]}
-        intensity={1.1}
+        intensity={1.8}
         color="#dce8ff"
         decay={1.5}
         distance={40}
       />
 
-      <ambientLight intensity={0.8} color="#fffaf2" />
+      <ambientLight intensity={1.25} color="#ffffff" />
 
       <group ref={groupRef}>
         <FloatingParticles />
@@ -350,16 +350,44 @@ function SpiralStage({ images, selectedIndex, onSelect, manualRotation, config, 
 // ---------------------------------------------------------------------------
 export function SpiralGallery({ images = [] }: { images?: string[] }) {
   const config = DEFAULT_CONFIG
-  const galleryImages = useMemo(
+  const fallbackImages = useMemo(
     () => (images.length > 0 ? images : spiralImageUrls(config.imageCount)),
     [images, config.imageCount]
   )
 
+  const [remoteImages, setRemoteImages] = useState<string[] | null>(null)
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const manualRotation = useRef(0)
   const scrollTarget = useRef(0)
   const scrollOffset = useRef(0)
   const scrollVelocity = useRef(0)
+
+  useEffect(() => {
+    if (images.length > 0) return
+
+    const controller = new AbortController()
+
+    const apiBaseUrl = import.meta.env.PUBLIC_API_URL?.replace(/\/$/, '') ?? ''
+    const apiPath = '/api/spiral-gallery/photos'
+
+    fetch(`${apiBaseUrl}${apiPath}`, { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error(`Photo API returned ${response.status}`)
+        return response.json() as Promise<{ photos?: Array<{ url: string }> }>
+      })
+      .then((data) => {
+        const urls = data.photos
+          ?.map((photo) => photo.url.startsWith('http') ? photo.url : `${apiBaseUrl}${photo.url}`)
+          .filter(Boolean) ?? []
+        if (urls.length > 0) setRemoteImages(urls)
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return
+        console.error('Unable to load remote spiral photos:', error)
+      })
+
+    return () => controller.abort()
+  }, [images.length])
 
   useEffect(() => {
     const closePreview = (event: KeyboardEvent) => {
@@ -370,6 +398,7 @@ export function SpiralGallery({ images = [] }: { images?: string[] }) {
     return () => window.removeEventListener('keydown', closePreview)
   }, [])
 
+  const galleryImages = remoteImages ?? fallbackImages
   if (galleryImages.length === 0) return null
 
   const selectedImage = selectedIndex != null ? galleryImages[selectedIndex] : null
