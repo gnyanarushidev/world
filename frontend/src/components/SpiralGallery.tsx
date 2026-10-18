@@ -217,14 +217,14 @@ interface SpiralStageProps {
   images: string[]
   selectedIndex: number | null
   onSelect: (index: number) => void
+  manualRotation: MutableRefObject<number>
   config: SpiralGalleryConfig
   scrollTarget: MutableRefObject<number>
   scrollOffset: MutableRefObject<number>
   scrollVelocity: MutableRefObject<number>
-  sidewaysRotation: MutableRefObject<number>
 }
 
-function SpiralStage({ images, selectedIndex, onSelect, config, scrollTarget, scrollOffset, scrollVelocity, sidewaysRotation }: SpiralStageProps) {
+function SpiralStage({ images, selectedIndex, onSelect, manualRotation, config, scrollTarget, scrollOffset, scrollVelocity }: SpiralStageProps) {
   const groupRef = useRef<THREE.Group>(null)
   const rotationSpeed = useRef(0)
   const lastScrollDirection = useRef(1)
@@ -279,11 +279,10 @@ function SpiralStage({ images, selectedIndex, onSelect, config, scrollTarget, sc
       clampedRotationSpeed,
       1 - Math.pow(1 - config.rotationSmoothing, delta * 60)
     )
-    if (!prefersReducedMotion) {
-      groupRef.current.rotation.y += rotationSpeed.current * delta
+    if (!prefersReducedMotion || manualRotation.current !== 0) {
+      groupRef.current.rotation.y += (rotationSpeed.current + manualRotation.current) * delta
     }
-    groupRef.current.rotation.y += sidewaysRotation.current
-    sidewaysRotation.current *= Math.pow(0.001, delta)
+    manualRotation.current = THREE.MathUtils.damp(manualRotation.current, 0, 6, delta)
 
     // Keep the camera level while retaining the reference's subtle pointer
     // parallax around the centered view.
@@ -357,11 +356,10 @@ export function SpiralGallery({ images = [] }: { images?: string[] }) {
   )
 
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
+  const manualRotation = useRef(0)
   const scrollTarget = useRef(0)
   const scrollOffset = useRef(0)
   const scrollVelocity = useRef(0)
-  const sidewaysRotation = useRef(0)
-  const dragStartX = useRef<number | null>(null)
 
   useEffect(() => {
     const closePreview = (event: KeyboardEvent) => {
@@ -384,26 +382,6 @@ export function SpiralGallery({ images = [] }: { images?: string[] }) {
           onWheel={(event) => {
             // Do not preventDefault: the webpage keeps its normal scroll behavior.
             scrollTarget.current += event.deltaY * 0.006
-            sidewaysRotation.current += event.deltaX * 0.0015
-          }}
-          onPointerDown={(event) => {
-            dragStartX.current = event.clientX
-          }}
-          onPointerMove={(event) => {
-            if (dragStartX.current == null) return
-
-            const movementX = event.clientX - dragStartX.current
-            sidewaysRotation.current += movementX * 0.004
-            dragStartX.current = event.clientX
-          }}
-          onPointerUp={() => {
-            dragStartX.current = null
-          }}
-          onPointerCancel={() => {
-            dragStartX.current = null
-          }}
-          onPointerLeave={() => {
-            dragStartX.current = null
           }}
         >
           <Canvas
@@ -415,13 +393,36 @@ export function SpiralGallery({ images = [] }: { images?: string[] }) {
               images={galleryImages}
               selectedIndex={selectedIndex}
               onSelect={setSelectedIndex}
+              manualRotation={manualRotation}
               config={config}
               scrollTarget={scrollTarget}
               scrollOffset={scrollOffset}
               scrollVelocity={scrollVelocity}
-              sidewaysRotation={sidewaysRotation}
             />
           </Canvas>
+
+          <div className="spiral-rotation-controls" aria-label="Rotate spiral">
+            <button
+              type="button"
+              onClick={() => {
+                manualRotation.current -= 2.4
+              }}
+              aria-label="Rotate spiral left"
+              title="Rotate left"
+            >
+              ←
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                manualRotation.current += 2.4
+              }}
+              aria-label="Rotate spiral right"
+              title="Rotate right"
+            >
+              →
+            </button>
+          </div>
 
           {selectedIndex != null && selectedImage && (
             <div
