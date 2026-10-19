@@ -44,10 +44,3 @@ export const DEFAULT_CONFIG: SpiralGalleryConfig = {
   cameraLookAtY: 0,
   cameraDistance: 12,
 }
-
-// Distinct Picsum seeds give distinct photographs while keeping URLs stable.
-// Geometry does not depend on this list; swap in real URLs whenever ready.
-export const spiralImageUrls = (count: number): string[] =>
-  Array.from({ length: count }, (_, i) =>
-    `https://picsum.photos/seed/spiral-${i + 1}/800/1000`
-  )

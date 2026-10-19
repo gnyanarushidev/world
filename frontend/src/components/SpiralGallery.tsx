@@ -1,10 +1,10 @@
-import { useRef, useState, useMemo, useEffect, type MutableRefObject } from 'react'
+import { useCallback, useRef, useState, useMemo, useEffect, type MutableRefObject } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Edges, useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 
 import type { SpiralGalleryConfig } from './spiralGalleryConfig'
-import { DEFAULT_CONFIG, spiralImageUrls } from './spiralGalleryConfig'
+import { DEFAULT_CONFIG } from './spiralGalleryConfig'
 
 // ---------------------------------------------------------------------------
 // Warm placeholder texture (canvas drawn once at module level). A failed or
@@ -350,12 +350,11 @@ function SpiralStage({ images, selectedIndex, onSelect, manualRotation, config, 
 // ---------------------------------------------------------------------------
 export function SpiralGallery({ images = [] }: { images?: string[] }) {
   const config = DEFAULT_CONFIG
-  const fallbackImages = useMemo(
-    () => (images.length > 0 ? images : spiralImageUrls(config.imageCount)),
-    [images, config.imageCount]
-  )
+  const fallbackImages = useMemo(() => images, [images])
 
   const [remoteImages, setRemoteImages] = useState<string[] | null>(null)
+  const [isInitialLoading, setIsInitialLoading] = useState(true)
+  const [apiError, setApiError] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const manualRotation = useRef(0)
   const scrollTarget = useRef(0)
@@ -363,14 +362,15 @@ export function SpiralGallery({ images = [] }: { images?: string[] }) {
   const scrollVelocity = useRef(0)
 
   useEffect(() => {
-    if (images.length > 0) return
+    if (images.length > 0) {
+      setIsInitialLoading(false)
+      return
+    }
 
     const controller = new AbortController()
-
     const apiBaseUrl = import.meta.env.PUBLIC_API_URL?.replace(/\/$/, '') ?? ''
-    const apiPath = '/api/spiral-gallery/photos'
 
-    fetch(`${apiBaseUrl}${apiPath}`, { signal: controller.signal })
+    fetch(`${apiBaseUrl}/api/spiral-gallery/photos`, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error(`Photo API returned ${response.status}`)
         return response.json() as Promise<{ photos?: Array<{ url: string }> }>
@@ -380,10 +380,13 @@ export function SpiralGallery({ images = [] }: { images?: string[] }) {
           ?.map((photo) => photo.url.startsWith('http') ? photo.url : `${apiBaseUrl}${photo.url}`)
           .filter(Boolean) ?? []
         if (urls.length > 0) setRemoteImages(urls)
+        setIsInitialLoading(false)
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === 'AbortError') return
-        console.error('Unable to load remote spiral photos:', error)
+        console.error('Unable to load spiral gallery photos:', error)
+        setApiError(true)
+        setIsInitialLoading(false)
       })
 
     return () => controller.abort()
@@ -399,12 +402,47 @@ export function SpiralGallery({ images = [] }: { images?: string[] }) {
   }, [])
 
   const galleryImages = remoteImages ?? fallbackImages
-  if (galleryImages.length === 0) return null
 
   const selectedImage = selectedIndex != null ? galleryImages[selectedIndex] : null
 
+  const retry = useCallback(() => {
+    setApiError(false)
+    setIsInitialLoading(true)
+    setRemoteImages(null)
+  }, [])
+
   return (
     <section className="spiral-gallery-section">
+      {apiError && (
+        <div
+          className="spiral-gallery-fallback"
+          role="status"
+          aria-label="Spiral gallery unavailable"
+          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 2 }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              color: '#6b5444',
+              textAlign: 'center',
+              padding: '0 20px',
+            }}
+          >
+            <p>Spiral gallery could not be loaded.</p>
+            <button
+              type="button"
+              className="spiral-gallery-btn spiral-gallery-retry"
+              onClick={retry}
+              style={{ marginTop: 10 }}
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
       <div className="spiral-gallery-content">
         <div
           className="spiral-gallery-stage"
@@ -429,6 +467,12 @@ export function SpiralGallery({ images = [] }: { images?: string[] }) {
               scrollVelocity={scrollVelocity}
             />
           </Canvas>
+
+          {isInitialLoading && galleryImages.length === 0 && (
+            <div className="spiral-gallery-loading" role="status" aria-label="Loading spiral gallery">
+              <p>Loading images…</p>
+            </div>
+          )}
 
           <div className="spiral-rotation-controls" aria-label="Rotate spiral">
             <button

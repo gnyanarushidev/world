@@ -1,21 +1,17 @@
-const requiredVariables = [
-  'B2_KEY_ID',
-  'B2_APPLICATION_KEY',
-  'B2_BUCKET_NAME',
-]
+// ---------------------------------------------------------------------------
+// Local assets configuration.
+//
+// Images are served directly from backend/src/assets/<folder>/, not from
+// Backblaze cloud storage. No credentials required.
+// ---------------------------------------------------------------------------
 
-export function getStorageConfig() {
-  const missingVariables = requiredVariables.filter((name) => !process.env[name])
-  if (missingVariables.length > 0) {
-    throw new Error(`Missing Backblaze configuration: ${missingVariables.join(', ')}`)
-  }
+const GALLERY_DIRS = {
+  spiral: 'withme',
+  'image-orbit': 'chinnu',
+}
 
-  const configuredPrefix = process.env.B2_PHOTOS_PREFIX || 'worldwithme'
-
-  return {
-    bucket: process.env.B2_BUCKET_NAME,
-    prefix: configuredPrefix.endsWith('/') ? configuredPrefix : `${configuredPrefix}/`,
-    keyId: process.env.B2_KEY_ID,
-    applicationKey: process.env.B2_APPLICATION_KEY,
-  }
+export function getAssetDir(gallery = 'spiral') {
+  const dir = GALLERY_DIRS[gallery]
+  if (!dir) throw new Error(`Unknown gallery: ${gallery}`)
+  return new URL(`../assets/${dir}/`, import.meta.url).pathname
 }

@@ -7,6 +7,6 @@ import {
 const spiralGalleryRoutes = Router()
 
 spiralGalleryRoutes.get('/photos', getSpiralGalleryPhotos)
-spiralGalleryRoutes.get('/photo', getSpiralGalleryPhoto)
+spiralGalleryRoutes.get('/photo/:fileName', getSpiralGalleryPhoto)
 
 export default spiralGalleryRoutes

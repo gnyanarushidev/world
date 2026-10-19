@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { chapters, sampleMemories, type ChapterId } from './data'
 import { Hero } from './components/Hero'
 import { SpiralGallery } from './components/SpiralGallery'
+import { ImageOrbitGallery } from './components/ImageOrbitGallery'
 import './App.css'
 
 function App() {
@@ -27,6 +28,7 @@ function App() {
         <div className="welcome-section">
           <Hero />
           <SpiralGallery />
+          <ImageOrbitGallery />
         </div>
       ) : (
         <section className="chapter">

@@ -1,5 +1,6 @@
 import express from 'express'
 import spiralGalleryRoutes from './routes/spiralGalleryRoutes.js'
+import imageOrbitGalleryRoutes from './routes/imageOrbitGalleryRoutes.js'
 
 const app = express()
 const allowedOrigins = (process.env.FRONTEND_ORIGINS ?? process.env.FRONTEND_ORIGIN ?? 'http://localhost:5173')
@@ -23,5 +24,6 @@ app.use((request, response, next) => {
 })
 
 app.use('/api/spiral-gallery', spiralGalleryRoutes)
+app.use('/api/image-orbit-gallery', imageOrbitGalleryRoutes)
 
 export default app
