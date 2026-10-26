@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { chapters, sampleMemories, type ChapterId } from './data'
 import { Hero } from './components/Hero'
 import { SpiralGallery } from './components/SpiralGallery'
@@ -11,6 +11,17 @@ function App() {
   const chapter = chapters.find((item) => item.id === activeChapterId) ?? chapters[0]
 
   const goToChapter = (id: ChapterId) => setActiveChapterId(id)
+
+  // Navigate to the previous or next journey chapter when the spiral is
+  // scrolled on the left or right side of the screen.
+  const navigateChapter = useCallback(
+    (direction: -1 | 1) => {
+      const currentIndex = chapters.findIndex((item) => item.id === activeChapterId)
+      const nextIndex = (currentIndex + direction + chapters.length) % chapters.length
+      goToChapter(chapters[nextIndex].id)
+    },
+    [activeChapterId]
+  )
 
   return (
     <main className="app" style={{ '--accent': chapter.accent } as React.CSSProperties}>
@@ -27,7 +38,7 @@ function App() {
       {chapter.id === 'welcome' ? (
         <div className="welcome-section">
           <Hero />
-          <SpiralGallery />
+          <SpiralGallery onNavigate={navigateChapter} />
           <ImageOrbitGallery />
         </div>
       ) : (

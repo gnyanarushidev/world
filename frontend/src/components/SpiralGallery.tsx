@@ -222,9 +222,11 @@ interface SpiralStageProps {
   scrollTarget: MutableRefObject<number>
   scrollOffset: MutableRefObject<number>
   scrollVelocity: MutableRefObject<number>
+  tiltRef: React.MutableRefObject<number>
+  scrollingEnabled: boolean
 }
 
-function SpiralStage({ images, selectedIndex, onSelect, manualRotation, config, scrollTarget, scrollOffset, scrollVelocity }: SpiralStageProps) {
+function SpiralStage({ images, selectedIndex, onSelect, manualRotation, config, scrollTarget, scrollOffset, scrollVelocity, tiltRef, scrollingEnabled }: SpiralStageProps) {
   const groupRef = useRef<THREE.Group>(null)
   const rotationSpeed = useRef(0)
   const lastScrollDirection = useRef(1)
@@ -251,34 +253,48 @@ function SpiralStage({ images, selectedIndex, onSelect, manualRotation, config, 
   useFrame((_state, delta) => {
     if (!groupRef.current || !camera) return
 
-    // Smooth, inertial vertical photo movement inspired by the reference.
-    const previousOffset = scrollOffset.current
-    scrollOffset.current = THREE.MathUtils.damp(
-      scrollOffset.current,
-      scrollTarget.current,
-      5.5,
-      delta
-    )
-    scrollVelocity.current = (scrollOffset.current - previousOffset) / Math.max(delta, 0.001)
+    if (scrollingEnabled) {
+      // Smooth, inertial vertical photo movement inspired by the reference.
+      const previousOffset = scrollOffset.current
+      scrollOffset.current = THREE.MathUtils.damp(
+        scrollOffset.current,
+        scrollTarget.current,
+        5.5,
+        delta
+      )
+      scrollVelocity.current = (scrollOffset.current - previousOffset) / Math.max(delta, 0.001)
 
-    // Match the reference's momentum-based rotation: idle rotation continues
-    // in the last scroll direction while scrolling adds rotational force.
-    if (Math.abs(scrollVelocity.current) > 0.0001) {
-      lastScrollDirection.current = scrollVelocity.current > 0 ? 1 : -1
+      // Match the reference's momentum-based rotation: idle rotation continues
+      // in the last scroll direction while scrolling adds rotational force.
+      if (Math.abs(scrollVelocity.current) > 0.0001) {
+        lastScrollDirection.current = scrollVelocity.current > 0 ? 1 : -1
+      }
+      const targetRotationSpeed =
+        config.rotationSpeed * lastScrollDirection.current +
+        scrollVelocity.current * config.scrollRotationForce
+      const clampedRotationSpeed = THREE.MathUtils.clamp(
+        targetRotationSpeed,
+        -config.maxRotationSpeed,
+        config.maxRotationSpeed
+      )
+      rotationSpeed.current = THREE.MathUtils.lerp(
+        rotationSpeed.current,
+        clampedRotationSpeed,
+        1 - Math.pow(1 - config.rotationSmoothing, delta * 60)
+      )
+
+      // Tilt the whole spiral up/down based on scroll (around the local X axis).
+      groupRef.current.rotation.x = THREE.MathUtils.damp(
+        groupRef.current.rotation.x,
+        tiltRef.current,
+        6,
+        delta
+      )
+    } else {
+      // Scrolling stopped: freeze auto-rotation and scroll-driven movement.
+      rotationSpeed.current = 0
     }
-    const targetRotationSpeed =
-      config.rotationSpeed * lastScrollDirection.current +
-      scrollVelocity.current * config.scrollRotationForce
-    const clampedRotationSpeed = THREE.MathUtils.clamp(
-      targetRotationSpeed,
-      -config.maxRotationSpeed,
-      config.maxRotationSpeed
-    )
-    rotationSpeed.current = THREE.MathUtils.lerp(
-      rotationSpeed.current,
-      clampedRotationSpeed,
-      1 - Math.pow(1 - config.rotationSmoothing, delta * 60)
-    )
+
     if (!prefersReducedMotion || manualRotation.current !== 0) {
       groupRef.current.rotation.y += (rotationSpeed.current + manualRotation.current) * delta
     }
@@ -348,7 +364,12 @@ function SpiralStage({ images, selectedIndex, onSelect, manualRotation, config, 
 // ---------------------------------------------------------------------------
 // Public component – sits in its own section in normal document flow.
 // ---------------------------------------------------------------------------
-export function SpiralGallery({ images = [] }: { images?: string[] }) {
+interface SpiralGalleryProps {
+  images?: string[]
+  onNavigate?: (direction: -1 | 1) => void
+}
+
+export function SpiralGallery({ images = [], onNavigate }: SpiralGalleryProps) {
   const config = DEFAULT_CONFIG
   const fallbackImages = useMemo(() => images, [images])
 
@@ -356,10 +377,14 @@ export function SpiralGallery({ images = [] }: { images?: string[] }) {
   const [isInitialLoading, setIsInitialLoading] = useState(true)
   const [apiError, setApiError] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
+  // Scrolling of the spiral is active by default when entering from the Hero section.
+  const [scrollingEnabled, setScrollingEnabled] = useState(true)
   const manualRotation = useRef(0)
   const scrollTarget = useRef(0)
   const scrollOffset = useRef(0)
   const scrollVelocity = useRef(0)
+  const tiltRef = useRef(0)
+  const lastNavigateTime = useRef(0)
 
   useEffect(() => {
     if (images.length > 0) {
@@ -447,8 +472,31 @@ export function SpiralGallery({ images = [] }: { images?: string[] }) {
         <div
           className="spiral-gallery-stage"
           onWheel={(event) => {
-            // Do not preventDefault: the webpage keeps its normal scroll behavior.
-            scrollTarget.current += event.deltaY * 0.006
+            if (!scrollingEnabled) return
+            event.preventDefault()
+            const { deltaX, deltaY, clientX } = event
+            const rect = event.currentTarget.getBoundingClientRect()
+            const isLeft = clientX < rect.left + rect.width / 2
+
+            // Vertical scroll tilts the whole spiral up/down around its X axis.
+            tiltRef.current = THREE.MathUtils.clamp(
+              tiltRef.current + deltaY * 0.0015,
+              -0.6,
+              0.6
+            )
+
+            // Scrolling on the left side goes to the previous component,
+            // scrolling on the right side goes to the next component.
+            // Throttled so a single wheel gesture navigates at most once.
+            const now = performance.now()
+            if (
+              onNavigate &&
+              (Math.abs(deltaY) > 8 || Math.abs(deltaX) > 8) &&
+              now - lastNavigateTime.current > 900
+            ) {
+              lastNavigateTime.current = now
+              onNavigate(isLeft ? -1 : 1)
+            }
           }}
         >
           <Canvas
@@ -465,6 +513,8 @@ export function SpiralGallery({ images = [] }: { images?: string[] }) {
               scrollTarget={scrollTarget}
               scrollOffset={scrollOffset}
               scrollVelocity={scrollVelocity}
+              tiltRef={tiltRef}
+              scrollingEnabled={scrollingEnabled}
             />
           </Canvas>
 
@@ -496,6 +546,17 @@ export function SpiralGallery({ images = [] }: { images?: string[] }) {
               →
             </button>
           </div>
+
+          {/* Toggle to stop/start scrolling of the spiral. Active by default when entering from Hero. */}
+          <button
+            type="button"
+            className="spiral-scroll-toggle"
+            onClick={() => setScrollingEnabled((prev) => !prev)}
+            aria-label={scrollingEnabled ? 'Stop spiral scrolling' : 'Start spiral scrolling'}
+            title={scrollingEnabled ? 'Stop scrolling' : 'Start scrolling'}
+          >
+            {scrollingEnabled ? '⏸' : '▶'}
+          </button>
 
           {selectedIndex != null && selectedImage && (
             <div

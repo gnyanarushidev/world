@@ -14,9 +14,8 @@ interface SpiralPlacement {
 
 interface OrbitImageProps {
   placement: SpiralPlacement
-  isMobile: boolean
+  texture: THREE.Texture
   onSelect: (url: string) => void
-  textureReady: boolean
 }
 
 interface OrbitContextValue {
@@ -31,7 +30,8 @@ interface OrbitContextValue {
 const OrbitContext = createContext<OrbitContextValue | null>(null)
 
 // ---------------------------------------------------------------------------
-// Warm placeholder texture. Shown only while a real photograph is loading.
+// Warm placeholder texture (canvas drawn once at module level). Shown only for
+// photographs that fail to load; never for successfully loaded photos.
 // ---------------------------------------------------------------------------
 const placeholderCanvas = document.createElement('canvas')
 placeholderCanvas.width = 64
@@ -43,125 +43,184 @@ placeholderCtx.strokeStyle = '#c7b299'
 placeholderCtx.lineWidth = 1.5
 placeholderCtx.strokeRect(0.5, 0.5, 63, 63)
 const PLACEHOLDER_TEXTURE = new THREE.Texture(placeholderCanvas)
+PLACEHOLDER_TEXTURE.colorSpace = THREE.SRGBColorSpace
 PLACEHOLDER_TEXTURE.needsUpdate = true
 
 // ---------------------------------------------------------------------------
-// Texture loading with a shared cache keyed by image URL.
-// Each texture is loaded once and reused by every card that references it.
+// Texture cache. Textures are loaded exactly once (module level, keyed by URL),
+// configured once before they are ever shown, and shared by every card that
+// uses the same photograph. Nothing is disposed while a visible card still
+// references it.
 // ---------------------------------------------------------------------------
-const textureLoader = new THREE.TextureLoader()
-const textureCache = new Map<string, THREE.Texture>()
-
-let pendingLoads = 0
-let loadedCount = 0
-let onTextureProgress: (() => void) | null = null
-
-function configureTexture(texture: THREE.Texture) {
-  texture.colorSpace = THREE.SRGBColorSpace
-  texture.minFilter = THREE.LinearMipmapLinearFilter
-  texture.magFilter = THREE.LinearFilter
-  texture.anisotropy = 16
-  texture.generateMipmaps = true
+interface TextureEntry {
+  texture: THREE.Texture
+  ok: boolean
+  aspect: number // naturalWidth / naturalHeight of the source photograph
 }
 
-function startPreload(urls: string[], onProgress: () => void) {
-  pendingLoads = urls.length
-  loadedCount = 0
-  onTextureProgress = onProgress
-  urls.forEach((url) => {
-    if (textureCache.has(url)) {
-      loadedCount += 1
-      onTextureProgress?.()
-      return
-    }
-    textureLoader.load(
+const textureCache = new Map<string, TextureEntry>()
+const loadPromiseCache = new Map<string, Promise<void>>()
+
+function loadImageTexture(url: string): Promise<void> {
+  const cached = textureCache.get(url)
+  if (cached) return Promise.resolve()
+
+  const inFlight = loadPromiseCache.get(url)
+  if (inFlight) return inFlight
+
+  const promise = new Promise<void>((resolve) => {
+    const loader = new THREE.TextureLoader()
+    loader.load(
       url,
       (texture) => {
-        configureTexture(texture)
-        textureCache.set(url, texture)
-        loadedCount += 1
-        onTextureProgress?.()
+        try {
+          // Photographic color textures are sRGB-encoded.
+          texture.colorSpace = THREE.SRGBColorSpace
+          // Minify with mipmaps, magnify linearly; keep pixels sharp.
+          texture.minFilter = THREE.LinearMipmapLinearFilter
+          texture.magFilter = THREE.LinearFilter
+          texture.generateMipmaps = true
+          // Anisotropy is clamped by the renderer to what the GPU supports.
+          texture.anisotropy = 16
+          texture.needsUpdate = true
+
+          const image = texture.image
+          const width =
+            image && typeof (image as HTMLImageElement).naturalWidth === 'number'
+              ? (image as HTMLImageElement).naturalWidth
+              : 0
+          const height =
+            image && typeof (image as HTMLImageElement).naturalHeight === 'number'
+              ? (image as HTMLImageElement).naturalHeight
+              : 0
+          const aspect = width > 0 && height > 0 ? width / height : 1
+
+          textureCache.set(url, { texture, ok: true, aspect })
+        } catch (error) {
+          console.error(`Failed to configure gallery texture: ${url}`, error)
+          textureCache.set(url, { texture: PLACEHOLDER_TEXTURE, ok: false, aspect: 1 })
+        }
+        resolve()
       },
       undefined,
-      (_error) => {
-        console.warn('ImageOrbitGallery: texture failed to load', url)
-        loadedCount += 1
-        onTextureProgress?.()
+      (error) => {
+        console.error(`Failed to load gallery photo: ${url}`, error)
+        textureCache.set(url, { texture: PLACEHOLDER_TEXTURE, ok: false, aspect: 1 })
+        resolve()
       }
     )
   })
+
+  loadPromiseCache.set(url, promise)
+  return promise
 }
 
-function getTexture(url: string): THREE.Texture | undefined {
-  return textureCache.get(url)
+function textureAspect(url: string): number {
+  const entry = textureCache.get(url)
+  return entry ? entry.aspect : 1
 }
 
 // ---------------------------------------------------------------------------
-// Spiral layout constants.
+// Spiral layout constants – five concentric rings, front-facing composition.
 // ---------------------------------------------------------------------------
-const NUM_ARMS = 3
-const TURNS = 3.2
-const INNER_RADIUS = 2.0
-const OUTER_RADIUS = 7.5
-const DESKTOP_IMAGE_LIMIT = 120
-const MOBILE_IMAGE_LIMIT = 32
-const BASE_THUMBNAIL_HEIGHT = 1.0   // height at INNER_RADIUS
-const MAX_THUMBNAIL_HEIGHT = 1.6    // cap for outer cards
-const THUMBNAIL_ASPECT = 0.72
-const MAT_SCALE = 1.14
-const DEFAULT_DISTANCE = 16
-const MOBILE_DISTANCE = 11
-const MIN_DISTANCE = 6
-const MAX_DISTANCE = 50
+const NUM_RINGS = 5
+const INNER_RADIUS = 2.2
+const OUTER_RADIUS = 8.2
+const DESKTOP_IMAGE_LIMIT = 60
+const MOBILE_IMAGE_LIMIT = 24
+const BASE_THUMBNAIL_HEIGHT = 1.1
+const SLOT_FILL = 0.72 // fraction of each image's angular slot used by the card
+const DEFAULT_DISTANCE = 18
+const MOBILE_DISTANCE = 12
+const MIN_DISTANCE = 7
+const MAX_DISTANCE = 60
 const AUTO_ROTATION_SPEED = 0
 
 // ---------------------------------------------------------------------------
-// Distribute photos along an Archimedean spiral with multiple interleaved arms.
-// r(theta) = INNER_RADIUS + b * theta, where b controls turn spacing.
-// Images are spaced by equal angle increments within each arm.
-// Card height scales with radius so cards never overlap at the tight
-// inner turns while remaining readable at the outer edge.
+// Distribute photos across five concentric rings. Images are assigned to rings
+// proportional to ring circumference and spaced by equal angle increments
+// within each ring. Card sizes keep the photograph's natural aspect ratio and
+// are clamped to the available arc length so neighbouring cards never overlap.
 // ---------------------------------------------------------------------------
-function distributeAlongSpiral(urls: string[], isMobile: boolean): SpiralPlacement[] {
+function distributeAlongRings(urls: string[], isMobile: boolean): SpiralPlacement[] {
   const total = urls.length
   const placements: SpiralPlacement[] = []
   if (total === 0) return placements
 
-  const maxTheta = TURNS * Math.PI * 2
-  const imagesPerArm = Math.ceil(total / NUM_ARMS)
-  const b = (OUTER_RADIUS - INNER_RADIUS) / maxTheta
+  const scale = isMobile ? MOBILE_DISTANCE / DEFAULT_DISTANCE : 1
+  const innerRadius = INNER_RADIUS * scale
+  const outerRadius = OUTER_RADIUS * scale
 
-  for (let arm = 0; arm < NUM_ARMS; arm++) {
-    const armPhase = (arm * Math.PI * 2) / NUM_ARMS
-    for (let i = 0; i < imagesPerArm; i++) {
-      const imageIndex = arm * imagesPerArm + i
-      if (imageIndex >= total) break
+  const radii: number[] = []
+  for (let i = 0; i < NUM_RINGS; i++) {
+    radii.push(innerRadius + (i / (NUM_RINGS - 1)) * (outerRadius - innerRadius))
+  }
 
-      const t = i / Math.max(imagesPerArm - 1, 1)
-      const theta = armPhase + maxTheta * t
+  const weightSum = radii.reduce((sum, radius) => sum + radius, 0)
 
-      // Archimedean spiral: r = a + b * theta
-      const radius = INNER_RADIUS + b * theta
+  // Image count per ring, proportional to circumference (radius).
+  const rawCounts = radii.map((radius) => (total * radius) / weightSum)
+  const counts = rawCounts.map(Math.floor)
+  let assigned = counts.reduce((sum, count) => sum + count, 0)
+  const remainders = rawCounts.map((raw, index) => raw - counts[index])
+  const byRemainder = [...Array(NUM_RINGS).keys()].sort((a, b) => remainders[b] - remainders[a])
+  let remainderIndex = 0
+  while (assigned < total) {
+    counts[byRemainder[remainderIndex % NUM_RINGS]] += 1
+    assigned += 1
+    remainderIndex += 1
+  }
 
-      const x = Math.cos(theta) * radius
-      const y = Math.sin(theta) * radius
+  // Make sure every ring receives at least one image when there are enough.
+  if (total >= NUM_RINGS) {
+    for (let ring = 0; ring < NUM_RINGS; ring++) {
+      if (counts[ring] === 0) {
+        const donor = counts.indexOf(Math.max(...counts))
+        if (counts[donor] > 1) {
+          counts[donor] -= 1
+          counts[ring] = 1
+        }
+      }
+    }
+  }
 
-      // Card height scales with radius: smaller at center, larger at edge.
-      // Clamped so cards never exceed available arc length at their radius.
-      const sizeT = (radius - INNER_RADIUS) / (OUTER_RADIUS - INNER_RADIUS)
-      const height = BASE_THUMBNAIL_HEIGHT + sizeT * (MAX_THUMBNAIL_HEIGHT - BASE_THUMBNAIL_HEIGHT)
-      const width = height * THUMBNAIL_ASPECT
+  let offset = 0
+  for (let ring = 0; ring < NUM_RINGS; ring++) {
+    const count = counts[ring]
+    if (count === 0) continue
+
+    const radius = radii[ring]
+    const ringScale = 1 + 0.15 * (ring / (NUM_RINGS - 1))
+    // Slight stagger between rings so cards never line up radially.
+    const phase = (ring * Math.PI) / NUM_RINGS
+    const slotWidth = (2 * Math.PI * radius) / count
+
+    for (let j = 0; j < count; j++) {
+      const imageIndex = offset + j
+      const url = urls[imageIndex]
+      const aspect = textureAspect(url)
+
+      const angle = (j / count) * 2 * Math.PI + phase
+      const x = Math.cos(angle) * radius
+      const y = Math.sin(angle) * radius
+
+      const maxWidth = slotWidth * SLOT_FILL
+      const targetHeight = BASE_THUMBNAIL_HEIGHT * scale * ringScale
+      const height = Math.min(targetHeight, maxWidth / aspect)
+      const width = height * aspect
 
       placements.push({
-        url: urls[imageIndex],
+        url,
         x,
         y,
-        angle: theta,
+        angle,
         radius,
         width,
         height,
       })
     }
+
+    offset += count
   }
 
   return placements
@@ -169,59 +228,29 @@ function distributeAlongSpiral(urls: string[], isMobile: boolean): SpiralPlaceme
 
 // ---------------------------------------------------------------------------
 // One photo thumbnail: a textured plane facing the camera, upright.
-// The card's own rotation is near-zero; the position angle is used ONLY
-// for placement, never for card orientation.
+// The card's local transform is stable; the group rotation (if any) is
+// applied by the parent gallery group, never per card.
 // ---------------------------------------------------------------------------
-function OrbitImage({ placement, isMobile, onSelect, textureReady }: OrbitImageProps) {
-  const texture = getTexture(placement.url)
+function OrbitImage({ placement, texture, onSelect }: OrbitImageProps) {
   const groupRef = useRef<THREE.Group>(null)
-
-  const scale = isMobile ? 0.78 : 1
-  const width = placement.width * scale
-  const height = placement.height * scale
-
-  // Stable, near-zero rotation so each photograph stays upright and readable.
-  const cardTilt = Math.sin(placement.angle * 2.1) * 0.015
-
-  useFrame(() => {
-    const group = groupRef.current
-    if (!group) return
-
-    group.position.set(placement.x, placement.y, 0)
-    group.rotation.set(0, 0, cardTilt)
-    group.scale.setScalar(1)
-  })
+  const { width, height } = placement
 
   const handleClick = (event: React.MouseEvent) => {
     event.stopPropagation()
     onSelect(placement.url)
   }
 
-  const matWidth = width * MAT_SCALE
-  const matHeight = height * MAT_SCALE
-
-  const activeTexture = textureReady && texture ? texture : PLACEHOLDER_TEXTURE
-
   return (
-    <group ref={groupRef}>
-      {/* Warm white border / mat behind each thumbnail. */}
-      <mesh renderOrder={0}>
-        <planeGeometry args={[matWidth, matHeight]} />
-        <meshStandardMaterial color="#f2ece1" side={THREE.DoubleSide} />
-      </mesh>
+    <group ref={groupRef} position={[placement.x, placement.y, 0]}>
       <mesh
         renderOrder={1}
         onClick={handleClick}
       >
         <planeGeometry args={[width, height]} />
-        <meshStandardMaterial
-          map={activeTexture}
+        <meshBasicMaterial
+          map={texture}
           color="#ffffff"
           side={THREE.DoubleSide}
-          roughness={0.3}
-          metalness={0}
-          emissive={0xffffff}
-          emissiveIntensity={0.06}
         />
       </mesh>
     </group>
@@ -248,6 +277,7 @@ function OrbitRig({ children, cameraDistance, prefersReducedMotion, isMobile }: 
   const distanceRef = useRef(cameraDistance)
   const targetDistanceRef = useRef(cameraDistance)
   const smoothPointer = useRef(new THREE.Vector2())
+  const pointerTarget = useRef(new THREE.Vector2())
 
   const setTargetDistance = useCallback((delta: number) => {
     targetDistanceRef.current = THREE.MathUtils.clamp(
@@ -274,11 +304,11 @@ function OrbitRig({ children, cameraDistance, prefersReducedMotion, isMobile }: 
     group.rotation.z = rotationRef.current
 
     const parallax = prefersReducedMotion ? 0 : 0.12
-    const pointerTarget = new THREE.Vector2(
+    pointerTarget.current.set(
       state.pointer.x * parallax,
       -state.pointer.y * parallax * 0.5
     )
-    smoothPointer.current.lerp(pointerTarget, 1 - Math.pow(0.94, delta * 60))
+    smoothPointer.current.lerp(pointerTarget.current, 1 - Math.pow(0.94, delta * 60))
 
     const elevation = isMobile ? 0.3 : 0
     camera.position.set(
@@ -318,7 +348,11 @@ function toAbsoluteUrl(url: string): string {
 
 // ---------------------------------------------------------------------------
 // Public component – sits in its own section in normal document flow.
-// Loads images from local assets: backend/src/assets/chinnu/
+// Loads real photographs from the backend manifest
+//   GET /api/image-orbit-gallery/photos
+//   GET /api/image-orbit-gallery/photo/:fileName
+// Images are stored in backend/src/assets/chinnu/
+// The gallery is revealed only after its initial textures have finished loading.
 // ---------------------------------------------------------------------------
 export function ImageOrbitGallery({ images = [] }: { images?: string[] } = {}) {
   const [remoteImages, setRemoteImages] = useState<string[]>([])
@@ -328,6 +362,9 @@ export function ImageOrbitGallery({ images = [] }: { images?: string[] } = {}) {
   const [windowWidth, setWindowWidth] = useState(
     () => (typeof window !== 'undefined' ? window.innerWidth : 1024)
   )
+  const [refresh, setRefresh] = useState(0)
+  const [cardTextures, setCardTextures] = useState<Map<string, THREE.Texture>>(new Map())
+  const [placements, setPlacements] = useState<SpiralPlacement[]>([])
 
   useEffect(() => {
     const onResize = () => setWindowWidth(window.innerWidth)
@@ -335,46 +372,76 @@ export function ImageOrbitGallery({ images = [] }: { images?: string[] } = {}) {
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
-  // Fetch images from backend API: /api/image-orbit-gallery/photos
+  // Fetch the manifest, then preload every texture before revealing the gallery.
   useEffect(() => {
-    if (images.length > 0) {
-      setRemoteImages(images)
+    let cancelled = false
+
+    const run = async () => {
+      let urls: string[]
+
+      if (images.length > 0) {
+        urls = [...images]
+      } else if (remoteImages.length > 0) {
+        urls = [...remoteImages]
+      } else {
+        const controller = new AbortController()
+        const apiBaseUrl = import.meta.env.PUBLIC_API_URL?.replace(/\/$/, '') ?? ''
+
+        try {
+          const response = await fetch(
+            `${apiBaseUrl}/api/image-orbit-gallery/photos`,
+            { signal: controller.signal }
+          )
+          if (!response.ok) throw new Error(`Photo API returned ${response.status}`)
+          const data = (await response.json()) as {
+            photos?: Array<{ url: string }>
+          }
+          const parsed = data.photos
+            ?.map((photo) => toAbsoluteUrl(photo.url))
+            .filter(Boolean) ?? []
+          if (!cancelled && parsed.length > 0) {
+            setRemoteImages(parsed)
+          }
+          urls = parsed
+        } catch (error) {
+          if (!cancelled) {
+            if (error instanceof DOMException && error.name === 'AbortError') {
+              return
+            }
+            console.error('Unable to load image orbit gallery photos:', error)
+            setApiError(true)
+            setTexturesReady(true)
+          }
+          return
+        } finally {
+          if (!cancelled) controller.abort()
+        }
+      }
+
+      // Load and configure every texture before any card becomes visible.
+      await Promise.all(urls.map((url) => loadImageTexture(url)))
+
+      if (cancelled) return
+
+      const nextTextures = new Map<string, THREE.Texture>()
+      for (const url of urls) {
+        const entry = textureCache.get(url)
+        nextTextures.set(url, entry ? entry.texture : PLACEHOLDER_TEXTURE)
+      }
+      setCardTextures(nextTextures)
+
+      const isMobile = windowWidth < 768
+      const limit = isMobile ? MOBILE_IMAGE_LIMIT : DESKTOP_IMAGE_LIMIT
+      setPlacements(distributeAlongRings(urls.slice(0, limit), isMobile))
       setTexturesReady(true)
-      return
     }
 
-    const controller = new AbortController()
-    const apiBaseUrl = import.meta.env.PUBLIC_API_URL?.replace(/\/$/, '') ?? ''
+    void run()
 
-    fetch(`${apiBaseUrl}/api/image-orbit-gallery/photos`, { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error(`Photo API returned ${response.status}`)
-        return response.json() as Promise<{ photos?: Array<{ url: string }> }>
-      })
-      .then((data) => {
-        const urls = data.photos
-          ?.map((photo) => toAbsoluteUrl(photo.url))
-          .filter(Boolean) ?? []
-        if (urls.length > 0) {
-          setRemoteImages(urls)
-          startPreload(urls, () => {
-            if (loadedCount >= pendingLoads) {
-              setTexturesReady(true)
-            }
-          })
-        } else {
-          setTexturesReady(true)
-        }
-      })
-      .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === 'AbortError') return
-        console.error('Unable to load image orbit gallery photos:', error)
-        setApiError(true)
-        setTexturesReady(true)
-      })
-
-    return () => controller.abort()
-  }, [images.length])
+    return () => {
+      cancelled = true
+    }
+  }, [images.length, remoteImages.length, refresh, windowWidth])
 
   // Close the preview with the Escape key.
   useEffect(() => {
@@ -386,19 +453,9 @@ export function ImageOrbitGallery({ images = [] }: { images?: string[] } = {}) {
   }, [])
 
   const isMobile = windowWidth < 768
-  const imageLimit = isMobile ? MOBILE_IMAGE_LIMIT : DESKTOP_IMAGE_LIMIT
   const cameraDistance = isMobile ? MOBILE_DISTANCE : DEFAULT_DISTANCE
   const prefersReducedMotion =
     typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
-  const source = remoteImages.length > 0 ? remoteImages : images
-  const galleryImages = useMemo(() => source.slice(0, imageLimit), [source, imageLimit])
-
-  // Recompute spiral layout when image count or mobile state changes.
-  const placements = useMemo(() => distributeAlongSpiral(galleryImages, isMobile), [
-    galleryImages,
-    isMobile,
-  ])
 
   const ctx = useContext(OrbitContext)
   const stageRef = useRef<HTMLDivElement>(null)
@@ -463,6 +520,9 @@ export function ImageOrbitGallery({ images = [] }: { images?: string[] } = {}) {
     setApiError(false)
     setTexturesReady(false)
     setRemoteImages([])
+    setPlacements([])
+    setCardTextures(new Map())
+    setRefresh((current) => current + 1)
   }, [])
 
   return (
@@ -501,6 +561,7 @@ export function ImageOrbitGallery({ images = [] }: { images?: string[] } = {}) {
         {texturesReady && (
           <Canvas
             camera={{ position: [0, 0, cameraDistance], fov: 55, near: 0.1, far: 100 }}
+            gl={{ antialias: true, powerPreference: 'high-performance' }}
             onCreated={(state) => {
               console.log('R3F onCreated:', {
                 gl: !!state.gl,
@@ -515,19 +576,12 @@ export function ImageOrbitGallery({ images = [] }: { images?: string[] } = {}) {
               prefersReducedMotion={prefersReducedMotion}
               isMobile={isMobile}
             >
-              {placements.length === 0 && (
-                <mesh>
-                  <planeGeometry args={[40, 40]} />
-                  <meshStandardMaterial color="#f4f1ea" transparent opacity={0.3} side={THREE.DoubleSide} />
-                </mesh>
-              )}
-              {placements.map((placement, index) => (
+              {placements.map((placement) => (
                 <OrbitImageMemo
                   key={placement.url}
                   placement={placement}
-                  isMobile={isMobile}
+                  texture={cardTextures.get(placement.url) ?? PLACEHOLDER_TEXTURE}
                   onSelect={setSelectedUrl}
-                  textureReady={texturesReady}
                 />
               ))}
             </OrbitRig>
