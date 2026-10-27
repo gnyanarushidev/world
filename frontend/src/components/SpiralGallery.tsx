@@ -508,10 +508,6 @@ export function SpiralGallery({ images = [] }: SpiralGalleryProps) {
             </button>
           </div>
 
-          <p className="spiral-gallery-hint">
-            Scroll over the spiral to spin it · scroll beside it to continue
-          </p>
-
           {selectedIndex != null && selectedImage && (
             <div
               className="spiral-preview-panel"

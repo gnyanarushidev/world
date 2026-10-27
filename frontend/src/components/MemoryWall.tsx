@@ -197,8 +197,7 @@ export function MemoryWall() {
       </div>
 
       <header className="memory-heading">
-        <p className="memory-kicker">little moments, big love</p>
-        <h2>Every picture, a piece of us</h2>
+        <h2>Every picture, a piece of my happiness</h2>
         <p className="memory-sub">
           {status === 'ready' && photos.length > 0
             ? `${photos.length} memories, pinned up just for you`
