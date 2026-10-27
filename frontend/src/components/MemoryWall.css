@@ -10,8 +10,8 @@
   overflow: hidden;
   color: var(--ink);
   background:
-    radial-gradient(ellipse at 15% 8%, #ffe3ea 0%, transparent 45%),
-    radial-gradient(ellipse at 85% 30%, #fff0d9 0%, transparent 50%),
+    radial-gradient(ellipse at 15% 25%, #ffe3ea 0%, transparent 45%),
+    radial-gradient(ellipse at 85% 40%, #fff0d9 0%, transparent 50%),
     radial-gradient(ellipse at 30% 85%, #f6e4ff 0%, transparent 50%),
     #fff6f3;
 }

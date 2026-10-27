@@ -5,7 +5,7 @@
   height: 100vh;
   min-height: 560px;
   overflow: hidden;
-  background: #1a0f14;
+  background: #2a1020;
   color: #fff4eb;
   isolation: isolate;
 }
@@ -32,8 +32,9 @@
   inset: 0;
   z-index: 1;
   background:
-    linear-gradient(to top, rgba(22, 8, 16, 0.9) 0%, rgba(22, 8, 16, 0.62) 22%, rgba(22, 8, 16, 0) 50%),
-    linear-gradient(to bottom, rgba(22, 8, 16, 0.28) 0%, transparent 16%);
+    linear-gradient(to top, #3a1634 0%, rgba(58, 22, 52, 0.94) 6%, rgba(92, 28, 70, 0.6) 24%, rgba(140, 50, 96, 0) 55%),
+    radial-gradient(ellipse at 50% 0%, rgba(255, 183, 197, 0.22) 0%, transparent 60%),
+    linear-gradient(to bottom, rgba(58, 18, 52, 0.3) 0%, transparent 18%);
 }
 
 /* drifting orbs of light */
@@ -78,8 +79,9 @@
   font: 600 clamp(11px, 1.3vw, 14px)/1 Georgia, serif;
   letter-spacing: 0.42em;
   text-transform: uppercase;
-  color: #ffd9a0;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+  color: #ffd0dc;
+  margin-bottom: 12px;
+  text-shadow: 0 2px 12px rgba(60, 10, 50, 0.6);
 }
 .cinema-title {
   margin: 0;
@@ -87,13 +89,16 @@
   font-size: clamp(44px, 7.4vw, 104px);
   font-weight: 400;
   line-height: 1.05;
-  background: linear-gradient(180deg, #fffaf0 5%, #ffe0a3 45%, #f2a65a 100%);
+  background: linear-gradient(180deg, #fffaf3 5%, #ffd6df 42%, #f2a0b8 78%, #e8b86d 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
-  filter: drop-shadow(0 6px 28px rgba(0, 0, 0, 0.55));
+  filter: drop-shadow(0 6px 28px rgba(60, 10, 50, 0.6));
 }
+.cinema-sparkles { position: absolute; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
+.cinema-sparkles span { position: absolute; color: #ffe6b8; text-shadow: 0 0 12px rgba(255, 214, 140, 0.9); opacity: 0; animation: cinema-twinkle ease-in-out infinite; }
+@keyframes cinema-twinkle { 0%, 100% { opacity: 0; transform: scale(0.5) rotate(0deg); } 50% { opacity: 0.95; transform: scale(1.1) rotate(45deg); } }
 .cinema-name {
   display: flex;
   align-items: center;
@@ -157,6 +162,6 @@
   .cinema-music { width: 46px; height: 46px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cinema-bg, .cinema-bokeh span, .cinema-music.playing, .cinema-eq b { animation: none; }
+  .cinema-bg, .cinema-bokeh span, .cinema-sparkles span, .cinema-music.playing, .cinema-eq b { animation: none; }
   .cinema-content > * { animation: none; }
 }

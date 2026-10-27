@@ -18,7 +18,22 @@ const BOKEH: React.CSSProperties[] = Array.from({ length: 22 }, (_, i) => {
     height: size,
     animationDuration: `${16 + r(3) * 20}s`,
     animationDelay: `${-r(4) * 30}s`,
-    background: i % 3 === 0 ? 'rgba(255, 183, 197, 0.55)' : 'rgba(255, 214, 140, 0.55)',
+    background: i % 3 === 0 ? 'rgba(255, 183, 197, 0.55)' : 'rgba(255, 224, 170, 0.6)',
+  }
+})
+
+// Twinkling four-point stars scattered across the upper sky.
+const SPARKLES: React.CSSProperties[] = Array.from({ length: 16 }, (_, i) => {
+  const r = (n: number) => {
+    const x = Math.sin((i + 1) * 45.164 + n * 9.1337) * 24634.6345
+    return x - Math.floor(x)
+  }
+  return {
+    left: `${4 + r(1) * 92}%`,
+    top: `${3 + r(2) * 52}%`,
+    fontSize: 8 + r(3) * 14,
+    animationDuration: `${2.5 + r(4) * 3}s`,
+    animationDelay: `${-r(5) * 5}s`,
   }
 })
 
@@ -76,7 +91,14 @@ export function Hero() {
         ))}
       </div>
 
+      <div className="cinema-sparkles" aria-hidden="true">
+        {SPARKLES.map((style, index) => (
+          <span key={index} style={style}>✦</span>
+        ))}
+      </div>
+
       <div className="cinema-content">
+        <p className="cinema-kicker">✦✦</p>
         <h1 className="cinema-title">Happy Birthday</h1>
         <p className="cinema-name">
           <i aria-hidden="true" />
