@@ -23,7 +23,7 @@ export async function getSpiralGalleryPhoto(request, response) {
     )
 
     response.setHeader('Content-Type', contentType)
-    response.setHeader('Cache-Control', 'public, max-age=86400')
+    response.setHeader('Cache-Control', 'public, max-age=604800')
 
     if (typeof body.pipe === 'function') {
       body.pipe(response)

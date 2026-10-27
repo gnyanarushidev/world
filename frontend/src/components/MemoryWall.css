@@ -132,3 +132,11 @@
   .memory-polaroid, .memory-photo img { transition: opacity 0.3s ease; transform: rotate(var(--tilt)); }
   .memory-polaroid.is-visible:hover { transform: rotate(var(--tilt)); }
 }
+
+/* photos can't be dragged out, selected, or long-press-saved */
+.memory-wall img, .memory-lightbox img {
+  -webkit-user-drag: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.memory-photo img { pointer-events: none; } /* clicks go to the polaroid button */

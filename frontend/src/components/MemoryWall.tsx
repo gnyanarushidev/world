@@ -18,7 +18,8 @@ const NOTES = [
   'a little piece of home',
 ]
 const TAPES = ['#fbcfe8', '#fde68a', '#bfdbfe', '#c7f0d8', '#ddd6fe']
-const THUMB_WIDTH = 480
+// Same width the orbit gallery requests, so the browser reuses its cached copies.
+const THUMB_WIDTH = 512
 const HEART_COUNT = 16
 
 // Small deterministic hash so tilt / tape / notes are stable between renders.
@@ -91,6 +92,7 @@ function Polaroid({ url, index, onOpen }: PolaroidProps) {
         <img
           src={thumb(url)}
           alt=""
+          draggable={false}
           loading="lazy"
           decoding="async"
           onLoad={() => setLoaded(true)}
@@ -249,7 +251,7 @@ export function MemoryWall() {
             ‹
           </button>
           <figure onClick={(event) => event.stopPropagation()}>
-            <img src={photos[openIndex]} alt={`Memory ${openIndex + 1}`} />
+            <img src={photos[openIndex]} alt={`Memory ${openIndex + 1}`} draggable={false} />
             <figcaption>
               {openIndex + 1} / {photos.length}
             </figcaption>

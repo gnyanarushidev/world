@@ -42,3 +42,25 @@ export async function getThumbnailPath(filePath, width) {
   }
   return pending
 }
+
+// Resize every photo in a folder ahead of time so the first visitor never
+// waits on sharp. Runs in the background with a small concurrency limit.
+export async function warmThumbnails(dir, width, concurrency = 3) {
+  const files = fs
+    .readdirSync(dir)
+    .filter((file) => /\.(jpe?g|png|webp|avif)$/i.test(file))
+    .map((file) => path.join(dir, file))
+  let next = 0
+  const worker = async () => {
+    while (next < files.length) {
+      const filePath = files[next++]
+      try {
+        await getThumbnailPath(filePath, width)
+      } catch (error) {
+        console.error(`Could not pre-resize ${path.basename(filePath)}:`, error.message)
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: concurrency }, worker))
+  return files.length
+}
