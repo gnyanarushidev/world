@@ -1,0 +1,162 @@
+/* Hero – a slow, cinematic opening on the portrait: warm light, gold type. */
+.cinema-hero {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  min-height: 560px;
+  overflow: hidden;
+  background: #1a0f14;
+  color: #fff4eb;
+  isolation: isolate;
+}
+
+/* slow push-in on the photograph */
+.cinema-bg {
+  position: absolute;
+  inset: 0;
+  background-position: center 30%;
+  transform-origin: 50% 42%;
+  background-size: cover;
+  background-repeat: no-repeat;
+  animation: cinema-push 28s ease-in-out infinite alternate;
+  z-index: 0;
+}
+@keyframes cinema-push {
+  from { transform: scale(1); }
+  to { transform: scale(1.06); }
+}
+
+/* warm grade + legibility gradients */
+.cinema-shade {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(to top, rgba(22, 8, 16, 0.9) 0%, rgba(22, 8, 16, 0.62) 22%, rgba(22, 8, 16, 0) 50%),
+    linear-gradient(to bottom, rgba(22, 8, 16, 0.28) 0%, transparent 16%);
+}
+
+/* drifting orbs of light */
+.cinema-bokeh { position: absolute; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
+.cinema-bokeh span {
+  position: absolute;
+  bottom: -80px;
+  border-radius: 50%;
+  filter: blur(6px);
+  mix-blend-mode: screen;
+  opacity: 0;
+  animation: cinema-rise linear infinite;
+}
+@keyframes cinema-rise {
+  0% { transform: translate3d(0, 0, 0) scale(0.6); opacity: 0; }
+  15% { opacity: 0.55; }
+  85% { opacity: 0.4; }
+  100% { transform: translate3d(40px, -115vh, 0) scale(1.2); opacity: 0; }
+}
+
+/* title block – centred in the lower third, clear of the eyes */
+.cinema-content {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: clamp(56px, 9vh, 96px);
+  width: min(960px, calc(100% - 48px));
+  transform: translateX(-50%);
+  text-align: center;
+}
+.cinema-content > * { animation: cinema-fade-up 1.4s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.cinema-content > :nth-child(2) { animation-delay: 0.25s; }
+.cinema-content > :nth-child(3) { animation-delay: 0.5s; }
+.cinema-content > :nth-child(4) { animation-delay: 0.85s; }
+@keyframes cinema-fade-up {
+  from { opacity: 0; transform: translateY(28px); filter: blur(6px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+
+.cinema-kicker {
+  margin: 0 0 6px;
+  font: 600 clamp(11px, 1.3vw, 14px)/1 Georgia, serif;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: #ffd9a0;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+}
+.cinema-title {
+  margin: 0;
+  font-family: 'Segoe Script', 'Snell Roundhand', 'Bradley Hand', 'Brush Script MT', cursive;
+  font-size: clamp(44px, 7.4vw, 104px);
+  font-weight: 400;
+  line-height: 1.05;
+  background: linear-gradient(180deg, #fffaf0 5%, #ffe0a3 45%, #f2a65a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  filter: drop-shadow(0 6px 28px rgba(0, 0, 0, 0.55));
+}
+.cinema-name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin: 2px 0 0;
+  font: 500 clamp(16px, 2.2vw, 26px)/1 Georgia, serif;
+  letter-spacing: 0.7em;
+  padding-left: 0.7em;
+  color: #fff4eb;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.55);
+}
+.cinema-name i { flex: 0 1 clamp(36px, 8vw, 110px); height: 1px; background: linear-gradient(to right, #ffd9a0, transparent); }
+.cinema-name i:last-child { background: linear-gradient(to left, #ffd9a0, transparent); }
+
+.cinema-quote {
+  margin: clamp(14px, 2.4vh, 24px) auto 0;
+  max-width: 52ch;
+  font: italic 400 clamp(15px, 1.7vw, 20px)/1.6 Georgia, serif;
+  color: rgba(255, 244, 235, 0.94);
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.7);
+}
+
+/* music button */
+.cinema-music {
+  position: absolute;
+  z-index: 4;
+  right: clamp(20px, 4vw, 48px);
+  bottom: clamp(24px, 5vh, 46px);
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  padding: 0;
+  border: 1px solid rgba(255, 217, 160, 0.55);
+  border-radius: 50%;
+  color: #ffe9c4;
+  background: rgba(30, 14, 22, 0.42);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+}
+.cinema-music:hover { transform: scale(1.08); background: rgba(60, 28, 40, 0.6); border-color: #ffd9a0; }
+.cinema-music:focus-visible { outline: 2px solid #ffd9a0; outline-offset: 3px; }
+.cinema-music.playing { animation: cinema-halo 2.6s ease-in-out infinite; }
+@keyframes cinema-halo {
+  0%, 100% { box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35), 0 0 0 0 rgba(255, 217, 160, 0.4); }
+  50% { box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35), 0 0 0 12px rgba(255, 217, 160, 0); }
+}
+.cinema-eq { display: flex; align-items: flex-end; gap: 3px; height: 18px; }
+.cinema-eq b { width: 3px; height: 100%; border-radius: 2px; background: #ffd9a0; transform-origin: bottom; animation: cinema-eq 1s ease-in-out infinite; }
+.cinema-eq b:nth-child(2) { animation-delay: -0.3s; animation-duration: 0.8s; }
+.cinema-eq b:nth-child(3) { animation-delay: -0.6s; animation-duration: 1.2s; }
+.cinema-eq b:nth-child(4) { animation-delay: -0.15s; animation-duration: 0.9s; }
+@keyframes cinema-eq { 0%, 100% { transform: scaleY(0.25); } 50% { transform: scaleY(1); } }
+
+@media (max-width: 700px) {
+  .cinema-bg { background-position: 60% 25%; }
+  .cinema-name { letter-spacing: 0.45em; }
+  .cinema-music { width: 46px; height: 46px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cinema-bg, .cinema-bokeh span, .cinema-music.playing, .cinema-eq b { animation: none; }
+  .cinema-content > * { animation: none; }
+}
