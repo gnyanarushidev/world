@@ -94,7 +94,7 @@ function PhotoCard({
 }: PhotoCardProps) {
   const maxAnisotropy = useThree((state) => state.gl.capabilities.getMaxAnisotropy())
   // Sharp at oblique angles: max anisotropic filtering on every photo.
-  const texture = useTexture(image, (loaded) => {
+  const texture = useTexture(`${image}${image.includes('?') ? '&' : '?'}w=1024`, (loaded) => {
     ;[loaded].flat().forEach((item) => {
       item.anisotropy = maxAnisotropy
     })

@@ -6,6 +6,7 @@
 import fs from 'fs'
 import path from 'path'
 import { getAssetDir } from '../config/storage.js'
+import { getThumbnailPath } from '../utils/thumbnail.js'
 
 const imageExtensionPattern = /\.(avif|gif|jpe?g|png|webp|svg)$/i
 
@@ -24,7 +25,7 @@ export async function listSpiralGalleryPhotos() {
   }
 }
 
-export async function downloadSpiralGalleryPhoto(fileName) {
+export async function downloadSpiralGalleryPhoto(fileName, thumbnailWidth = null) {
   const dir = getAssetDir('spiral')
   const filePath = path.resolve(path.join(dir, fileName))
   const dirResolved = path.resolve(dir)
@@ -38,7 +39,15 @@ export async function downloadSpiralGalleryPhoto(fileName) {
     throw new Error('Photo not found')
   }
 
+  // SVG and GIF are left alone (vector / possibly animated).
   const ext = path.extname(fileName).toLowerCase()
+  if (thumbnailWidth && ext !== '.svg' && ext !== '.gif') {
+    return {
+      contentType: 'image/webp',
+      body: fs.createReadStream(await getThumbnailPath(filePath, thumbnailWidth)),
+    }
+  }
+
   let contentType = 'application/octet-stream'
   if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg'
   else if (ext === '.png') contentType = 'image/png'

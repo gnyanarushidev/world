@@ -1,3 +1,4 @@
+import { parseThumbnailWidth } from '../utils/thumbnail.js'
 import {
   downloadSpiralGalleryPhoto,
   listSpiralGalleryPhotos,
@@ -16,10 +17,13 @@ export async function getSpiralGalleryPhotos(_request, response) {
 export async function getSpiralGalleryPhoto(request, response) {
   try {
     const fileName = decodeURIComponent(request.params.fileName)
-    const { contentType, body } = await downloadSpiralGalleryPhoto(fileName)
+    const { contentType, body } = await downloadSpiralGalleryPhoto(
+      fileName,
+      parseThumbnailWidth(request.query.w)
+    )
 
     response.setHeader('Content-Type', contentType)
-    response.setHeader('Cache-Control', 'public, max-age=3600')
+    response.setHeader('Cache-Control', 'public, max-age=86400')
 
     if (typeof body.pipe === 'function') {
       body.pipe(response)

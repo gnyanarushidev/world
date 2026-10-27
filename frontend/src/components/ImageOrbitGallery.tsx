@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
 
@@ -8,7 +8,6 @@ interface SpiralPlacement {
   x: number
   y: number
   z: number
-  width: number
   height: number
 }
 
@@ -30,77 +29,79 @@ PLACEHOLDER_TEXTURE.colorSpace = THREE.SRGBColorSpace
 PLACEHOLDER_TEXTURE.needsUpdate = true
 
 // ---------------------------------------------------------------------------
-// Texture cache. Textures are loaded exactly once (module level, keyed by URL),
-// configured once before they are ever shown, and shared by every card that
-// uses the same photograph. Nothing is disposed while a visible card still
-// references it.
+// Texture cache. Photos are requested as small server-resized thumbnails, a few
+// at a time, and each card appears the moment its own texture arrives. Textures
+// are shared by every card that uses the same photograph.
 // ---------------------------------------------------------------------------
 interface TextureEntry {
   texture: THREE.Texture
-  ok: boolean
-  aspect: number // naturalWidth / naturalHeight of the source photograph
+  aspect: number // width / height of the photograph
 }
 
+const THUMBNAIL_WIDTH = 512
+const MAX_PARALLEL_LOADS = 6
+
 const textureCache = new Map<string, TextureEntry>()
-const loadPromiseCache = new Map<string, Promise<void>>()
+const requested = new Set<string>()
+const listeners = new Set<() => void>()
+const waiting: Array<() => void> = []
+let activeLoads = 0
 
-function loadImageTexture(url: string): Promise<void> {
-  const cached = textureCache.get(url)
-  if (cached) return Promise.resolve()
+function thumbnailUrl(url: string): string {
+  return `${url}${url.includes('?') ? '&' : '?'}w=${THUMBNAIL_WIDTH}`
+}
 
-  const inFlight = loadPromiseCache.get(url)
-  if (inFlight) return inFlight
+function notify() {
+  listeners.forEach((listener) => listener())
+}
 
-  const promise = new Promise<void>((resolve) => {
-    const loader = new THREE.TextureLoader()
-    loader.load(
+function subscribe(listener: () => void) {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
+}
+
+function pumpQueue() {
+  while (activeLoads < MAX_PARALLEL_LOADS && waiting.length > 0) {
+    activeLoads++
+    waiting.shift()!()
+  }
+}
+
+// Queue a thumbnail; requests start in the order they were queued.
+function queueTexture(url: string) {
+  if (requested.has(url)) return
+  requested.add(url)
+
+  waiting.push(() => {
+    const finish = () => {
+      activeLoads--
+      notify()
+      pumpQueue()
+    }
+    new THREE.TextureLoader().load(
       url,
       (texture) => {
-        try {
-          // Photographic color textures are sRGB-encoded.
-          texture.colorSpace = THREE.SRGBColorSpace
-          // Minify with mipmaps, magnify linearly; keep pixels sharp.
-          texture.minFilter = THREE.LinearMipmapLinearFilter
-          texture.magFilter = THREE.LinearFilter
-          texture.generateMipmaps = true
-          // Anisotropy is clamped by the renderer to what the GPU supports.
-          texture.anisotropy = 16
-          texture.needsUpdate = true
-
-          const image = texture.image
-          const width =
-            image && typeof (image as HTMLImageElement).naturalWidth === 'number'
-              ? (image as HTMLImageElement).naturalWidth
-              : 0
-          const height =
-            image && typeof (image as HTMLImageElement).naturalHeight === 'number'
-              ? (image as HTMLImageElement).naturalHeight
-              : 0
-          const aspect = width > 0 && height > 0 ? width / height : 1
-
-          textureCache.set(url, { texture, ok: true, aspect })
-        } catch (error) {
-          console.error(`Failed to configure gallery texture: ${url}`, error)
-          textureCache.set(url, { texture: PLACEHOLDER_TEXTURE, ok: false, aspect: 1 })
-        }
-        resolve()
+        texture.colorSpace = THREE.SRGBColorSpace
+        texture.minFilter = THREE.LinearMipmapLinearFilter
+        texture.magFilter = THREE.LinearFilter
+        texture.generateMipmaps = true
+        texture.anisotropy = 16
+        const image = texture.image as { width?: number; height?: number } | undefined
+        const aspect = image?.width && image?.height ? image.width / image.height : 1
+        textureCache.set(url, { texture, aspect })
+        finish()
       },
       undefined,
       (error) => {
         console.error(`Failed to load gallery photo: ${url}`, error)
-        textureCache.set(url, { texture: PLACEHOLDER_TEXTURE, ok: false, aspect: 1 })
-        resolve()
+        textureCache.set(url, { texture: PLACEHOLDER_TEXTURE, aspect: 1 })
+        finish()
       }
     )
   })
-
-  loadPromiseCache.set(url, promise)
-  return promise
-}
-
-function textureAspect(url: string): number {
-  const entry = textureCache.get(url)
-  return entry ? entry.aspect : 1
+  pumpQueue()
 }
 
 // ---------------------------------------------------------------------------
@@ -117,7 +118,7 @@ const MOBILE_CARD_COUNT = 260
 const BASE_CARD_HEIGHT = 0.46
 const DESKTOP_DISTANCE = 24
 const MOBILE_DISTANCE = 32
-const MIN_DISTANCE = 8
+const MIN_DISTANCE = 1.6
 const MAX_DISTANCE = 60
 const SPIN_SPEED = 0.06 // rad/s of the spiral turning in its own plane
 const TILT_X = 0.32
@@ -160,7 +161,6 @@ function buildPlacements(urls: string[], count: number): SpiralPlacement[] {
 
     const radius = CORE_RADIUS + growth * theta + (rand(i + 1) - 0.5) * 0.7
     const url = urls[(i * stride) % urls.length]
-    const aspect = THREE.MathUtils.clamp(textureAspect(url), 0.6, 1.8)
     const height = BASE_CARD_HEIGHT * (0.8 + rand(i + 7) * 0.55)
 
     placements.push({
@@ -168,8 +168,7 @@ function buildPlacements(urls: string[], count: number): SpiralPlacement[] {
       url,
       x: Math.cos(theta) * radius,
       y: Math.sin(theta) * radius,
-      z: (rand(i + 13) - 0.5) * 0.6,
-      width: height * aspect,
+      z: (rand(i + 13) - 0.5) * 0.9, // a little depth to fly between when zoomed in
       height,
     })
   }
@@ -182,26 +181,45 @@ function buildPlacements(urls: string[], count: number): SpiralPlacement[] {
 // ---------------------------------------------------------------------------
 interface OrbitImageProps {
   placement: SpiralPlacement
-  texture: THREE.Texture
   spinRef: React.MutableRefObject<number>
   onSelect: (url: string) => void
 }
 
-function OrbitImage({ placement, texture, spinRef, onSelect }: OrbitImageProps) {
+function OrbitImage({ placement, spinRef, onSelect }: OrbitImageProps) {
   const meshRef = useRef<THREE.Mesh>(null)
+  const materialRef = useRef<THREE.MeshBasicMaterial>(null)
   const hoveredRef = useRef(false)
-  const { width, height } = placement
+  const appearRef = useRef(0)
+  const hoverScaleRef = useRef(1)
+  const thumb = thumbnailUrl(placement.url)
+  const entry = useSyncExternalStore(subscribe, () => textureCache.get(thumb))
 
   useFrame((_state, delta) => {
     const mesh = meshRef.current
-    if (!mesh) return
+    const material = materialRef.current
+    if (!mesh || !material) return
+
+    // Fade and grow in once the photo has arrived.
+    appearRef.current = THREE.MathUtils.damp(appearRef.current, 1, 6, delta)
+    const appear = appearRef.current
+    material.opacity = Math.min(appear * 1.2, 1)
+    const settled = appear > 0.995
+    if (material.transparent === settled) {
+      material.transparent = !settled
+      material.needsUpdate = true
+    }
+
     // Counter the spiral's spin so every photo stays upright as it travels round.
     mesh.rotation.z = -spinRef.current
     const hovered = hoveredRef.current
-    mesh.scale.setScalar(THREE.MathUtils.damp(mesh.scale.x, hovered ? 2.4 : 1, 9, delta))
+    hoverScaleRef.current = THREE.MathUtils.damp(hoverScaleRef.current, hovered ? 2.4 : 1, 9, delta)
+    mesh.scale.setScalar((0.6 + 0.4 * appear) * hoverScaleRef.current)
     mesh.position.z = THREE.MathUtils.damp(mesh.position.z, hovered ? 1.5 : 0, 9, delta)
   })
 
+  if (!entry) return null
+
+  const aspect = THREE.MathUtils.clamp(entry.aspect, 0.6, 1.8)
   return (
     <group position={[placement.x, placement.y, placement.z]}>
       <mesh
@@ -220,8 +238,8 @@ function OrbitImage({ placement, texture, spinRef, onSelect }: OrbitImageProps) 
           document.body.style.cursor = ''
         }}
       >
-        <planeGeometry args={[width, height]} />
-        <meshBasicMaterial map={texture} side={THREE.DoubleSide} toneMapped={false} />
+        <planeGeometry args={[placement.height * aspect, placement.height]} />
+        <meshBasicMaterial ref={materialRef} map={entry.texture} side={THREE.DoubleSide} toneMapped={false} transparent opacity={0} />
       </mesh>
     </group>
   )
@@ -238,15 +256,18 @@ interface OrbitRigProps {
   spinRef: React.MutableRefObject<number>
   spinImpulseRef: React.MutableRefObject<number>
   targetDistanceRef: React.MutableRefObject<number>
+  restDistance: number
   prefersReducedMotion: boolean
 }
 
-function OrbitRig({ children, spinRef, spinImpulseRef, targetDistanceRef, prefersReducedMotion }: OrbitRigProps) {
+function OrbitRig({ children, spinRef, spinImpulseRef, targetDistanceRef, restDistance, prefersReducedMotion }: OrbitRigProps) {
   const { camera } = useThree()
   const tiltRef = useRef<THREE.Group>(null)
   const spinGroupRef = useRef<THREE.Group>(null)
   const distanceRef = useRef<number | null>(null)
-  useFrame((_state, delta) => {
+  const smoothPointer = useRef(new THREE.Vector2())
+
+  useFrame((state, delta) => {
     const tilt = tiltRef.current
     const spinGroup = spinGroupRef.current
     if (!tilt || !spinGroup) return
@@ -257,8 +278,16 @@ function OrbitRig({ children, spinRef, spinImpulseRef, targetDistanceRef, prefer
       10,
       delta
     )
-    camera.position.set(0, 0, distanceRef.current)
-    camera.lookAt(0, 0, 0)
+    // Zoomed out the view is fixed. The closer the camera flies in, the more the
+    // pointer lets you look around, like walking through a 3D gallery.
+    const closeness = THREE.MathUtils.clamp((restDistance - distanceRef.current) / (restDistance - MIN_DISTANCE), 0, 1)
+    const reach = prefersReducedMotion ? 0 : closeness * 7
+    smoothPointer.current.lerp(
+      new THREE.Vector2(state.pointer.x * reach, state.pointer.y * reach),
+      1 - Math.pow(0.9, delta * 60)
+    )
+    camera.position.set(smoothPointer.current.x, smoothPointer.current.y, distanceRef.current)
+    camera.lookAt(smoothPointer.current.x, smoothPointer.current.y, 0)
 
     spinRef.current += (prefersReducedMotion ? 0 : SPIN_SPEED) * delta
     spinRef.current += spinImpulseRef.current * delta
@@ -290,14 +319,13 @@ function toAbsoluteUrl(url: string): string {
 // ---------------------------------------------------------------------------
 export function ImageOrbitGallery({ images = [] }: { images?: string[] } = {}) {
   const [remoteImages, setRemoteImages] = useState<string[]>([])
-  const [texturesReady, setTexturesReady] = useState(false)
+  const [manifestReady, setManifestReady] = useState(false)
   const [apiError, setApiError] = useState(false)
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null)
   const [windowWidth, setWindowWidth] = useState(
     () => (typeof window !== 'undefined' ? window.innerWidth : 1024)
   )
   const [refresh, setRefresh] = useState(0)
-  const [cardTextures, setCardTextures] = useState<Map<string, THREE.Texture>>(new Map())
   const [placements, setPlacements] = useState<SpiralPlacement[]>([])
 
   const isMobile = windowWidth < 768
@@ -346,7 +374,7 @@ export function ImageOrbitGallery({ images = [] }: { images?: string[] } = {}) {
             if (error instanceof DOMException && error.name === 'AbortError') return
             console.error('Unable to load image orbit gallery photos:', error)
             setApiError(true)
-            setTexturesReady(true)
+            setManifestReady(true)
           }
           return
         } finally {
@@ -354,17 +382,13 @@ export function ImageOrbitGallery({ images = [] }: { images?: string[] } = {}) {
         }
       }
 
-      await Promise.all(urls.map((url) => loadImageTexture(url)))
       if (cancelled) return
 
-      const nextTextures = new Map<string, THREE.Texture>()
-      for (const url of urls) {
-        const entry = textureCache.get(url)
-        nextTextures.set(url, entry ? entry.texture : PLACEHOLDER_TEXTURE)
-      }
-      setCardTextures(nextTextures)
-      setPlacements(buildPlacements(urls, windowWidth < 768 ? MOBILE_CARD_COUNT : DESKTOP_CARD_COUNT))
-      setTexturesReady(true)
+      const nextPlacements = buildPlacements(urls, windowWidth < 768 ? MOBILE_CARD_COUNT : DESKTOP_CARD_COUNT)
+      setPlacements(nextPlacements)
+      setManifestReady(true)
+      // Load in spiral order so the spiral fills in from the centre outwards.
+      nextPlacements.forEach((placement) => queueTexture(thumbnailUrl(placement.url)))
     }
 
     void run()
@@ -382,9 +406,6 @@ export function ImageOrbitGallery({ images = [] }: { images?: string[] } = {}) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  const zoom = useCallback((delta: number) => {
-    targetDistanceRef.current = THREE.MathUtils.clamp(targetDistanceRef.current + delta, MIN_DISTANCE, MAX_DISTANCE)
-  }, [])
   const zoomBy = useCallback((factor: number) => {
     targetDistanceRef.current = THREE.MathUtils.clamp(targetDistanceRef.current * factor, MIN_DISTANCE, MAX_DISTANCE)
   }, [])
@@ -442,10 +463,9 @@ export function ImageOrbitGallery({ images = [] }: { images?: string[] } = {}) {
 
   const retry = useCallback(() => {
     setApiError(false)
-    setTexturesReady(false)
+    setManifestReady(false)
     setRemoteImages([])
     setPlacements([])
-    setCardTextures(new Map())
     setRefresh((current) => current + 1)
   }, [])
 
@@ -462,7 +482,7 @@ export function ImageOrbitGallery({ images = [] }: { images?: string[] } = {}) {
         </div>
       )}
       <div className="image-orbit-stage" ref={stageRef}>
-        {texturesReady && !apiError && (
+        {manifestReady && !apiError && (
           <Canvas
             dpr={[1, 2]}
             camera={{ position: [0, 0, cameraDistance], fov: 50, near: 0.1, far: 200 }}
@@ -473,13 +493,13 @@ export function ImageOrbitGallery({ images = [] }: { images?: string[] } = {}) {
               spinRef={spinRef}
               spinImpulseRef={spinImpulseRef}
               targetDistanceRef={targetDistanceRef}
+              restDistance={cameraDistance}
               prefersReducedMotion={prefersReducedMotion}
             >
               {placements.map((placement) => (
                 <OrbitImageMemo
                   key={placement.key}
                   placement={placement}
-                  texture={cardTextures.get(placement.url) ?? PLACEHOLDER_TEXTURE}
                   spinRef={spinRef}
                   onSelect={handleSelect}
                 />
@@ -488,7 +508,7 @@ export function ImageOrbitGallery({ images = [] }: { images?: string[] } = {}) {
           </Canvas>
         )}
 
-        {!texturesReady && !apiError && (
+        {!manifestReady && !apiError && (
           <div className="image-orbit-loading" role="status" aria-label="Loading image orbit gallery">
             <p>Loading images…</p>
           </div>
@@ -497,8 +517,8 @@ export function ImageOrbitGallery({ images = [] }: { images?: string[] } = {}) {
         <div className="image-orbit-controls" aria-label="Image orbit controls">
           <button type="button" className="image-orbit-btn" onClick={() => { spinImpulseRef.current -= 1.2 }} aria-label="Spin left" title="Spin left">←</button>
           <button type="button" className="image-orbit-btn" onClick={() => { spinImpulseRef.current += 1.2 }} aria-label="Spin right" title="Spin right">→</button>
-          <button type="button" className="image-orbit-btn" onClick={() => zoom(-3)} aria-label="Zoom in" title="Zoom in">+</button>
-          <button type="button" className="image-orbit-btn" onClick={() => zoom(3)} aria-label="Zoom out" title="Zoom out">−</button>
+          <button type="button" className="image-orbit-btn" onClick={() => zoomBy(0.7)} aria-label="Zoom in" title="Zoom in">+</button>
+          <button type="button" className="image-orbit-btn" onClick={() => zoomBy(1 / 0.7)} aria-label="Zoom out" title="Zoom out">−</button>
           <button type="button" className="image-orbit-btn" onClick={resetView} aria-label="Reset view" title="Reset view">↺</button>
         </div>
       </div>
