@@ -5,6 +5,12 @@ import * as THREE from 'three'
 
 import type { SpiralGalleryConfig } from './spiralGalleryConfig'
 import { DEFAULT_CONFIG } from './spiralGalleryConfig'
+import { QuoteCarousel } from './QuoteCarousel'
+
+const SPIRAL_QUOTES = [
+  'Some people are worth a thousand photographs.',
+  'In every picture, I find another reason to smile.',
+]
 
 // ---------------------------------------------------------------------------
 // Warm placeholder texture (canvas drawn once at module level). A failed or
@@ -452,9 +458,10 @@ export function SpiralGallery({ images = [] }: SpiralGalleryProps) {
       )}
       <div className="spiral-gallery-content">
         <header className="spiral-gallery-heading">
-          <h2>Our Memories</h2>
-          <p>{scrollingEnabled ? 'Scroll to spin the spiral · press ⏸ to keep scrolling down' : 'Paused · press ▶ to spin again'}</p>
+          <h2>Your Memories With Me</h2>
+
         </header>
+        <QuoteCarousel quotes={SPIRAL_QUOTES} className="quote-spiral" />
         <div
           className="spiral-gallery-stage"
           ref={stageRef}
@@ -506,6 +513,10 @@ export function SpiralGallery({ images = [] }: SpiralGalleryProps) {
               →
             </button>
           </div>
+
+          <p className="spiral-gallery-hint">
+            {scrollingEnabled ? 'Scroll to spin the spiral · press ⏸ to keep scrolling down' : 'Paused · press ▶ to spin again'}
+          </p>
 
           {/* Toggle to stop/start scrolling of the spiral. Active by default when entering from Hero. */}
           <button

@@ -1,6 +1,12 @@
 import { memo, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
+import { QuoteCarousel } from './QuoteCarousel'
+
+const ORBIT_QUOTES = [
+  'Every frame is a thank-you for having you in my life.',
+  'You are my favourite one.',
+]
 
 interface SpiralPlacement {
   key: string
@@ -116,11 +122,13 @@ const OUTER_RADIUS = 9
 const DESKTOP_CARD_COUNT = 520
 const MOBILE_CARD_COUNT = 260
 const BASE_CARD_HEIGHT = 0.46
-const DESKTOP_DISTANCE = 24
-const MOBILE_DISTANCE = 32
+const DESKTOP_DISTANCE = 27
+const MOBILE_DISTANCE = 34
 const MIN_DISTANCE = 1.6
 const MAX_DISTANCE = 60
 const SPIN_SPEED = 0.06 // rad/s of the spiral turning in its own plane
+// Sit the spiral a little low in the frame to leave room for the quotation.
+const VIEW_OFFSET_Y = 1.4
 const TILT_X = 0.32
 const TILT_Y = -0.3
 
@@ -286,8 +294,9 @@ function OrbitRig({ children, spinRef, spinImpulseRef, targetDistanceRef, restDi
       new THREE.Vector2(state.pointer.x * reach, state.pointer.y * reach),
       1 - Math.pow(0.9, delta * 60)
     )
-    camera.position.set(smoothPointer.current.x, smoothPointer.current.y, distanceRef.current)
-    camera.lookAt(smoothPointer.current.x, smoothPointer.current.y, 0)
+    const offsetY = VIEW_OFFSET_Y * (1 - closeness)
+    camera.position.set(smoothPointer.current.x, smoothPointer.current.y + offsetY, distanceRef.current)
+    camera.lookAt(smoothPointer.current.x, smoothPointer.current.y + offsetY, 0)
 
     spinRef.current += (prefersReducedMotion ? 0 : SPIN_SPEED) * delta
     spinRef.current += spinImpulseRef.current * delta
@@ -471,6 +480,7 @@ export function ImageOrbitGallery({ images = [] }: { images?: string[] } = {}) {
 
   return (
     <section className="image-orbit-section" aria-label="Image orbit gallery">
+      <QuoteCarousel quotes={ORBIT_QUOTES} className="quote-orbit" intervalMs={8000} />
       {apiError && (
         <div className="image-orbit-fallback" role="status" aria-label="Image orbit gallery unavailable">
           <div>

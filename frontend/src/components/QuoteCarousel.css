@@ -1,0 +1,42 @@
+.quote-carousel {
+  --quote-ink: #5b3a43;
+  --quote-accent: #d4577b;
+  margin: 0;
+  padding: 0 clamp(16px, 5vw, 40px);
+  text-align: center;
+  pointer-events: none;
+}
+.quote-flourish { display: block; margin-bottom: 6px; font-size: 18px; line-height: 1; color: var(--quote-accent); opacity: 0.8; }
+.quote-carousel blockquote {
+  margin: 0 auto;
+  max-width: 34ch;
+  font: italic 400 clamp(18px, 3vw, 28px)/1.4 Georgia, 'Times New Roman', serif;
+  letter-spacing: 0.01em;
+  color: var(--quote-ink);
+  text-wrap: balance;
+  animation: quote-in 1.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.quote-carousel blockquote::before { content: '\201C'; margin-right: 4px; color: var(--quote-accent); }
+.quote-carousel blockquote::after { content: '\201D'; margin-left: 2px; color: var(--quote-accent); }
+@keyframes quote-in {
+  from { opacity: 0; transform: translateY(10px); filter: blur(4px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+@media (prefers-reduced-motion: reduce) { .quote-carousel blockquote { animation: none; } }
+
+/* placement */
+.quote-spiral { position: absolute; top: clamp(70px, 11vh, 110px); left: 0; right: 0; z-index: 3; }
+.quote-orbit { position: absolute; top: clamp(22px, 5vh, 52px); left: 0; right: 0; z-index: 3; --quote-ink: #4a4a52; }
+
+/* soft fades so the quotation stays readable over passing photos */
+.image-orbit-section::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; z-index: 2; pointer-events: none;
+}
+.image-orbit-section::before { height: 150px; background: linear-gradient(to bottom, #e9e9e9 30%, rgba(233, 233, 233, 0)); }
+.spiral-gallery-hint { text-shadow: 0 0 10px #fbf4e9, 0 0 18px #fbf4e9; }
+
+/* photos dissolve behind the quotation (top) and the hint / controls (bottom) */
+.spiral-gallery-stage canvas {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 150px, #000 340px, #000 calc(100% - 210px), transparent calc(100% - 100px));
+  mask-image: linear-gradient(to bottom, transparent 150px, #000 340px, #000 calc(100% - 210px), transparent calc(100% - 100px));
+}
