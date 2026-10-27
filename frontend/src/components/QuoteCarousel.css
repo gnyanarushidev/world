@@ -25,18 +25,19 @@
 @media (prefers-reduced-motion: reduce) { .quote-carousel blockquote { animation: none; } }
 
 /* placement */
-.quote-spiral { position: absolute; top: clamp(70px, 11vh, 110px); left: 0; right: 0; z-index: 3; }
-.quote-orbit { position: absolute; top: clamp(22px, 5vh, 52px); left: 0; right: 0; z-index: 3; --quote-ink: #4a4a52; }
+.quote-spiral { position: absolute; top: clamp(70px, 11vh, 110px); left: 0; right: 0; z-index: 3; --quote-ink: #fff4f7; --quote-accent: #ffc9dc; }
+.quote-spiral blockquote { text-shadow: 0 2px 16px rgba(43, 32, 96, 0.5); }
+.quote-orbit { position: absolute; top: clamp(22px, 5vh, 52px); left: 0; right: 0; z-index: 3; --quote-ink: #4a3566; --quote-accent: #e0527a; }
 
 /* soft fades so the quotation stays readable over passing photos */
-.image-orbit-section::before {
-  content: ''; position: absolute; top: 0; left: 0; right: 0; z-index: 2; pointer-events: none;
-}
-.image-orbit-section::before { height: 150px; background: linear-gradient(to bottom, #e9e9e9 30%, rgba(233, 233, 233, 0)); }
-.spiral-gallery-hint { text-shadow: 0 0 10px #fbf4e9, 0 0 18px #fbf4e9; }
 
 /* photos dissolve behind the quotation (top) and the hint / controls (bottom) */
 .spiral-gallery-stage canvas {
   -webkit-mask-image: linear-gradient(to bottom, transparent 150px, #000 340px, #000 calc(100% - 210px), transparent calc(100% - 100px));
   mask-image: linear-gradient(to bottom, transparent 150px, #000 340px, #000 calc(100% - 210px), transparent calc(100% - 100px));
+}
+
+.image-orbit-stage canvas {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 40px, #000 150px);
+  mask-image: linear-gradient(to bottom, transparent 40px, #000 150px);
 }

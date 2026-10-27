@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { QuoteCarousel } from './QuoteCarousel'
 
 const ORBIT_QUOTES = [
-  'Every frame is a thank-you for having you in my life.',
+  'Every frame is a world for me , thank-you for having you in my life.',
   'You are my favourite one.',
 ]
 
@@ -498,7 +498,6 @@ export function ImageOrbitGallery({ images = [] }: { images?: string[] } = {}) {
             camera={{ position: [0, 0, cameraDistance], fov: 50, near: 0.1, far: 200 }}
             gl={{ antialias: true, powerPreference: 'high-performance' }}
           >
-            <color attach="background" args={['#e9e9e9']} />
             <OrbitRig
               spinRef={spinRef}
               spinImpulseRef={spinImpulseRef}
