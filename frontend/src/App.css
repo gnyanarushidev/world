@@ -32,9 +32,6 @@ button { cursor: pointer; }.hero-copy > button { margin-top: 25px; padding: 15px
 .spiral-rotation-controls button { width: 42px; height: 36px; border: 1px solid rgba(107, 84, 68, 0.35); border-radius: 18px; color: #6b5444; background: rgba(255, 255, 255, 0.72); font-size: 22px; line-height: 1; cursor: pointer; transition: background 0.2s ease, transform 0.2s ease; }
 .spiral-rotation-controls button:hover { background: #fff; transform: translateY(-2px); }
 .spiral-rotation-controls button:focus-visible { outline: 2px solid #6b5444; outline-offset: 2px; }
-.spiral-scroll-toggle { position: absolute; right: 24px; bottom: 24px; z-index: 4; width: 46px; height: 46px; border-radius: 50%; border: 1px solid rgba(107, 84, 68, 0.35); color: #6b5444; background: rgba(255, 255, 255, 0.88); font-size: 20px; line-height: 1; cursor: pointer; display: grid; place-items: center; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12); }
-.spiral-scroll-toggle:hover { background: #ffffff; }
-.spiral-scroll-toggle:focus-visible { outline: 2px solid #6b5444; outline-offset: 2px; }
 .spiral-preview-panel { position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%); width: min(92vw, 470px); max-width: 470px; background: rgba(255, 253, 248, 0.94); border: 1px solid rgba(107, 84, 68, 0.16); border-radius: 16px; padding: 16px 18px 14px 18px; box-shadow: 0 14px 48px rgba(0, 0, 0, 0.14); text-align: center; pointer-events: none; z-index: 10; backdrop-filter: blur(12px); }
 .spiral-preview-panel > * { pointer-events: auto; }
 .spiral-preview-panel img { width: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: 12px; border: 1px solid rgba(107, 84, 68, 0.14); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.16); transition: transform 0.35s ease, opacity 0.35s ease; pointer-events: auto; display: block; margin: 0 auto; opacity: 1; animation: spiralPreviewFade 0.45s ease both; }
