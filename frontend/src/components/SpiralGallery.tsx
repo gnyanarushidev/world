@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState, useMemo, useEffect, type MutableRefObject } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Edges, useTexture } from '@react-three/drei'
+import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 
 import type { SpiralGalleryConfig } from './spiralGalleryConfig'
@@ -92,8 +92,16 @@ function PhotoCard({
   scrollOffset,
   scrollVelocity,
 }: PhotoCardProps) {
-  const texture = useTexture(image) ?? PLACEHOLDER_TEXTURE
-  const meshRef = useRef<THREE.Mesh>(null)
+  const maxAnisotropy = useThree((state) => state.gl.capabilities.getMaxAnisotropy())
+  // Sharp at oblique angles: max anisotropic filtering on every photo.
+  const texture = useTexture(image, (loaded) => {
+    ;[loaded].flat().forEach((item) => {
+      item.anisotropy = maxAnisotropy
+    })
+  }) ?? PLACEHOLDER_TEXTURE
+  const groupRef = useRef<THREE.Group>(null)
+  const frontMaterialRef = useRef<THREE.MeshBasicMaterial>(null)
+  const backMaterialRef = useRef<THREE.MeshBasicMaterial>(null)
   const squeezeRef = useRef(0)
   const [hovered, setHovered] = useState(false)
 
@@ -105,16 +113,20 @@ function PhotoCard({
   const baseX = Math.sin(angle) * radius * radiusScale
   const baseZ = Math.cos(angle) * radius * radiusScale
 
+  // Keep each photo's real aspect ratio so nothing is stretched or cropped.
+  const image_ = texture.image as { width?: number; height?: number } | undefined
+  const aspect = image_?.width && image_?.height
+    ? THREE.MathUtils.clamp(image_.width / image_.height, 0.6, 1.5)
+    : 0.75
   const cardHeight = (baseCardHeight + Math.sin(index * 1.9) * heightVariance) * cardScale
-  const cardWidth = cardHeight * 0.68
+  const cardWidth = cardHeight * aspect
+  const frame = 0.09 * cardScale
 
   const baseRotationY = angle + Math.PI
-  const leanX = 0
-  const leanZ = 0
 
   useFrame((state, delta) => {
-    const mesh = meshRef.current
-    if (!mesh) return
+    const group = groupRef.current
+    if (!group) return
 
     const elapsed = state.clock.elapsedTime
     const floatY = Math.sin(elapsed * 0.7 + index) * 0.03
@@ -123,88 +135,64 @@ function PhotoCard({
       totalHeight
     ) - totalHeight / 2
 
-    const targetScale = selected ? 1.4 : hovered ? 1.1 : 1
-    mesh.scale.setScalar(THREE.MathUtils.damp(mesh.scale.x, targetScale, 7, delta))
+    const targetScale = selected ? 1.4 : hovered ? 1.12 : 1
+    group.scale.setScalar(THREE.MathUtils.damp(group.scale.x, targetScale, 7, delta))
 
-    // Scroll velocity temporarily squeezes the spiral toward its center,
-    // matching the reference gallery's elastic compression effect.
-    const squeezeTarget = Math.min(
-      Math.abs(scrollVelocity.current) * 3,
-      1
-    ) * config.squeezeIntensity
-    squeezeRef.current = THREE.MathUtils.damp(
-      squeezeRef.current,
-      squeezeTarget,
-      5,
-      delta
-    )
+    // Scroll velocity temporarily squeezes the spiral toward its center.
+    const squeezeTarget = Math.min(Math.abs(scrollVelocity.current) * 3, 1) * config.squeezeIntensity
+    squeezeRef.current = THREE.MathUtils.damp(squeezeRef.current, squeezeTarget, 5, delta)
     const squeezeFalloff = Math.exp(
-      -(scrolledY * scrolledY) /
-        (config.squeezeWidth * config.squeezeWidth)
+      -(scrolledY * scrolledY) / (config.squeezeWidth * config.squeezeWidth)
     )
-    const squeezedRadius =
-      radius * radiusScale *
-      (1 - squeezeRef.current * squeezeFalloff)
+    const squeezedRadius = radius * radiusScale * (1 - squeezeRef.current * squeezeFalloff)
     const breathing = Math.sin(elapsed * 0.55 + angle * 1.7) * config.breathingAmount
     const animatedRadius = squeezedRadius + breathing
-    const squeezedX = Math.sin(angle) * animatedRadius
-    const squeezedZ = Math.cos(angle) * animatedRadius
-    const motionFlex = THREE.MathUtils.clamp(
-      scrollVelocity.current * 0.018,
-      -0.08,
-      0.08
-    )
+    const motionFlex = THREE.MathUtils.clamp(scrollVelocity.current * 0.018, -0.08, 0.08)
 
-    mesh.position.set(
-      squeezedX,
+    group.position.set(
+      Math.sin(angle) * animatedRadius,
       scrolledY + floatY,
-      squeezedZ
+      Math.cos(angle) * animatedRadius
     )
-    mesh.rotation.set(
-      leanX,
-      baseRotationY + motionFlex,
-      leanZ
-    )
+    group.rotation.set(0, baseRotationY + motionFlex, 0)
 
-    const material = mesh.material as THREE.MeshStandardMaterial
-    material.emissiveIntensity = THREE.MathUtils.damp(
-      material.emissiveIntensity,
-      selected ? 0.5 : hovered ? 0.2 : 0.04,
-      7,
-      delta
-    )
+    // Photos are drawn unlit so their colours are true; hover/selection only
+    // brightens them slightly.
+    const tint = selected ? 1 : hovered ? 0.96 : 0.9
+    frontMaterialRef.current?.color.setScalar(THREE.MathUtils.damp(frontMaterialRef.current.color.r, tint, 7, delta))
+    backMaterialRef.current?.color.setScalar(THREE.MathUtils.damp(backMaterialRef.current.color.r, tint, 7, delta))
   })
 
-  const handleClick = (event: React.MouseEvent) => {
+  const handleClick = (event: { stopPropagation: () => void }) => {
     event.stopPropagation()
     onSelect(index)
   }
 
   return (
-    <mesh
-      ref={meshRef}
+    <group
+      ref={groupRef}
       position={[baseX, baseY, baseZ]}
-      rotation={[leanX, baseRotationY, leanZ]}
+      rotation={[0, baseRotationY, 0]}
       onClick={handleClick}
       onPointerOver={() => setHovered(true)}
       onPointerOut={() => setHovered(false)}
     >
-      <boxGeometry args={[cardWidth, cardHeight, 0.05]} />
-      <meshStandardMaterial
-        map={texture}
-        color="#ffffff"
-        side={THREE.DoubleSide}
-        roughness={0.35}
-        metalness={0}
-        emissive={0xffffff}
-        emissiveIntensity={0.8}
-      />
-      <Edges
-        threshold={15}
-        color={selected ? '#fff1c7' : hovered ? '#d8c7ff' : '#8b8794'}
-        linewidth={1.8}
-      />
-    </mesh>
+      {/* Cream photo-print frame */}
+      <mesh>
+        <boxGeometry args={[cardWidth + frame * 2, cardHeight + frame * 2, 0.05]} />
+        <meshBasicMaterial color={selected ? '#fff1c7' : '#fffdf8'} fog={false} toneMapped={false} />
+      </mesh>
+      {/* Photo on the front face */}
+      <mesh position={[0, 0, 0.0265]}>
+        <planeGeometry args={[cardWidth, cardHeight]} />
+        <meshBasicMaterial ref={frontMaterialRef} map={texture} fog={false} toneMapped={false} />
+      </mesh>
+      {/* Photo on the back face so it stays readable from either side */}
+      <mesh position={[0, 0, -0.0265]} rotation={[0, Math.PI, 0]}>
+        <planeGeometry args={[cardWidth, cardHeight]} />
+        <meshBasicMaterial ref={backMaterialRef} map={texture} fog={false} toneMapped={false} />
+      </mesh>
+    </group>
   )
 }
 
@@ -291,8 +279,10 @@ function SpiralStage({ images, selectedIndex, onSelect, manualRotation, config, 
         delta
       )
     } else {
-      // Scrolling stopped: freeze auto-rotation and scroll-driven movement.
-      rotationSpeed.current = 0
+      // Paused: ease the spiral to a stop and freeze scroll-driven movement.
+      scrollTarget.current = scrollOffset.current
+      scrollVelocity.current = 0
+      rotationSpeed.current = THREE.MathUtils.damp(rotationSpeed.current, 0, 5, delta)
     }
 
     if (!prefersReducedMotion || manualRotation.current !== 0) {
@@ -317,28 +307,6 @@ function SpiralStage({ images, selectedIndex, onSelect, manualRotation, config, 
 
   return (
     <>
-      <fog args={['#f4f1ea', 12, 42]} />
-
-      {/* Warm key light from above */}
-      <pointLight
-        position={[5, 9, 4]}
-        intensity={3}
-        color="#fff8ee"
-        decay={1.5}
-        distance={40}
-      />
-
-      {/* Warm fill light from below */}
-      <pointLight
-        position={[-6, -2, 6]}
-        intensity={1.8}
-        color="#dce8ff"
-        decay={1.5}
-        distance={40}
-      />
-
-      <ambientLight intensity={1.25} color="#ffffff" />
-
       <group ref={groupRef}>
         <FloatingParticles />
         {images.map((image, index) => (
@@ -366,10 +334,9 @@ function SpiralStage({ images, selectedIndex, onSelect, manualRotation, config, 
 // ---------------------------------------------------------------------------
 interface SpiralGalleryProps {
   images?: string[]
-  onNavigate?: (direction: -1 | 1) => void
 }
 
-export function SpiralGallery({ images = [], onNavigate }: SpiralGalleryProps) {
+export function SpiralGallery({ images = [] }: SpiralGalleryProps) {
   const config = DEFAULT_CONFIG
   const fallbackImages = useMemo(() => images, [images])
 
@@ -384,7 +351,7 @@ export function SpiralGallery({ images = [], onNavigate }: SpiralGalleryProps) {
   const scrollOffset = useRef(0)
   const scrollVelocity = useRef(0)
   const tiltRef = useRef(0)
-  const lastNavigateTime = useRef(0)
+  const stageRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (images.length > 0) {
@@ -416,6 +383,21 @@ export function SpiralGallery({ images = [], onNavigate }: SpiralGalleryProps) {
 
     return () => controller.abort()
   }, [images.length])
+
+  // While the spiral is playing, the wheel spins it instead of scrolling the
+  // page on to the next component. Pausing hands scrolling back to the page.
+  // Native listener because React's onWheel is passive and can't preventDefault.
+  useEffect(() => {
+    const stage = stageRef.current
+    if (!stage || !scrollingEnabled) return
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault()
+      scrollTarget.current += event.deltaY * 0.01
+      tiltRef.current = THREE.MathUtils.clamp(tiltRef.current + event.deltaY * 0.0006, -0.35, 0.35)
+    }
+    stage.addEventListener('wheel', onWheel, { passive: false })
+    return () => stage.removeEventListener('wheel', onWheel)
+  }, [scrollingEnabled])
 
   useEffect(() => {
     const closePreview = (event: KeyboardEvent) => {
@@ -469,41 +451,19 @@ export function SpiralGallery({ images = [], onNavigate }: SpiralGalleryProps) {
         </div>
       )}
       <div className="spiral-gallery-content">
+        <header className="spiral-gallery-heading">
+          <h2>Our Memories</h2>
+          <p>{scrollingEnabled ? 'Scroll to spin the spiral · press ⏸ to keep scrolling down' : 'Paused · press ▶ to spin again'}</p>
+        </header>
         <div
           className="spiral-gallery-stage"
-          onWheel={(event) => {
-            if (!scrollingEnabled) return
-            event.preventDefault()
-            const { deltaX, deltaY, clientX } = event
-            const rect = event.currentTarget.getBoundingClientRect()
-            const isLeft = clientX < rect.left + rect.width / 2
-
-            // Vertical scroll tilts the whole spiral up/down around its X axis.
-            tiltRef.current = THREE.MathUtils.clamp(
-              tiltRef.current + deltaY * 0.0015,
-              -0.6,
-              0.6
-            )
-
-            // Scrolling on the left side goes to the previous component,
-            // scrolling on the right side goes to the next component.
-            // Throttled so a single wheel gesture navigates at most once.
-            const now = performance.now()
-            if (
-              onNavigate &&
-              (Math.abs(deltaY) > 8 || Math.abs(deltaX) > 8) &&
-              now - lastNavigateTime.current > 900
-            ) {
-              lastNavigateTime.current = now
-              onNavigate(isLeft ? -1 : 1)
-            }
-          }}
+          ref={stageRef}
         >
           <Canvas
+            dpr={[1, 2]}
             camera={{ position: [0, 0, config.cameraDistance], fov: 75, near: 0.1, far: 1000 }}
             gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
           >
-            <color attach="background" args={['#f4f1ea']} />
             <SpiralStage
               images={galleryImages}
               selectedIndex={selectedIndex}

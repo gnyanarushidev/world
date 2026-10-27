@@ -27,12 +27,12 @@ export interface SpiralGalleryConfig {
 
 export const DEFAULT_CONFIG: SpiralGalleryConfig = {
   imageCount: 36,
-  radius: 7,
+  radius: 7.5,
   imagesPerTurn: 7,
   verticalSpacing: 1.2,
-  baseCardHeight: 2.45,
-  heightVariance: 0.45,
-  rotationSpeed: 0.06,
+  baseCardHeight: 3.1,
+  heightVariance: 0.35,
+  rotationSpeed: 0.22,
   scrollRotationForce: 0.5,
   rotationSmoothing: 0.1,
   maxRotationSpeed: 12,
@@ -42,5 +42,5 @@ export const DEFAULT_CONFIG: SpiralGalleryConfig = {
   breathingAmount: 0.025,
   cameraElevation: 0,
   cameraLookAtY: 0,
-  cameraDistance: 12,
+  cameraDistance: 13,
 }
