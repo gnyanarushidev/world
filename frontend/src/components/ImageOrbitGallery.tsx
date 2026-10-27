@@ -18,29 +18,12 @@ interface SpiralPlacement {
 }
 
 // ---------------------------------------------------------------------------
-// Warm placeholder texture (canvas drawn once at module level). Shown only for
-// photographs that fail to load; never for successfully loaded photos.
-// ---------------------------------------------------------------------------
-const placeholderCanvas = document.createElement('canvas')
-placeholderCanvas.width = 64
-placeholderCanvas.height = 64
-const placeholderCtx = placeholderCanvas.getContext('2d')!
-placeholderCtx.fillStyle = '#f5f1ea'
-placeholderCtx.fillRect(0, 0, 64, 64)
-placeholderCtx.strokeStyle = '#c7b299'
-placeholderCtx.lineWidth = 1.5
-placeholderCtx.strokeRect(0.5, 0.5, 63, 63)
-const PLACEHOLDER_TEXTURE = new THREE.Texture(placeholderCanvas)
-PLACEHOLDER_TEXTURE.colorSpace = THREE.SRGBColorSpace
-PLACEHOLDER_TEXTURE.needsUpdate = true
-
-// ---------------------------------------------------------------------------
 // Texture cache. Photos are requested as small server-resized thumbnails, a few
 // at a time, and each card appears the moment its own texture arrives. Textures
 // are shared by every card that uses the same photograph.
 // ---------------------------------------------------------------------------
 interface TextureEntry {
-  texture: THREE.Texture
+  texture: THREE.Texture | null // null when the photo could not be loaded
   aspect: number // width / height of the photograph
 }
 
@@ -86,26 +69,30 @@ function queueTexture(url: string) {
       notify()
       pumpQueue()
     }
-    new THREE.TextureLoader().load(
-      url,
-      (texture) => {
-        texture.colorSpace = THREE.SRGBColorSpace
-        texture.minFilter = THREE.LinearMipmapLinearFilter
-        texture.magFilter = THREE.LinearFilter
-        texture.generateMipmaps = true
-        texture.anisotropy = 16
-        const image = texture.image as { width?: number; height?: number } | undefined
-        const aspect = image?.width && image?.height ? image.width / image.height : 1
-        textureCache.set(url, { texture, aspect })
-        finish()
-      },
-      undefined,
-      (error) => {
-        console.error(`Failed to load gallery photo: ${url}`, error)
-        textureCache.set(url, { texture: PLACEHOLDER_TEXTURE, aspect: 1 })
-        finish()
-      }
-    )
+    const loader = new THREE.TextureLoader()
+    const onLoaded = (texture: THREE.Texture) => {
+      texture.colorSpace = THREE.SRGBColorSpace
+      texture.minFilter = THREE.LinearMipmapLinearFilter
+      texture.magFilter = THREE.LinearFilter
+      texture.generateMipmaps = true
+      texture.anisotropy = 16
+      const image = texture.image as { width?: number; height?: number } | undefined
+      const aspect = image?.width && image?.height ? image.width / image.height : 1
+      textureCache.set(url, { texture, aspect })
+      finish()
+    }
+    const onFailed = (error: unknown) => {
+      console.error(`Failed to load gallery photo: ${url}`, error)
+      // A card with no photo is hidden, never drawn as an empty tile.
+      textureCache.set(url, { texture: null, aspect: 1 })
+      finish()
+    }
+    loader.load(url, onLoaded, undefined, (error) => {
+      // If the resized copy is unavailable, fall back to the original photo.
+      const original = url.replace(/[?&]w=\d+$/, '')
+      if (original === url) return onFailed(error)
+      loader.load(original, onLoaded, undefined, onFailed)
+    })
   })
   pumpQueue()
 }
@@ -225,7 +212,7 @@ function OrbitImage({ placement, spinRef, onSelect }: OrbitImageProps) {
     mesh.position.z = THREE.MathUtils.damp(mesh.position.z, hovered ? 1.5 : 0, 9, delta)
   })
 
-  if (!entry) return null
+  if (!entry?.texture) return null
 
   const aspect = THREE.MathUtils.clamp(entry.aspect, 0.6, 1.8)
   return (

@@ -1,7 +1,26 @@
 import { useEffect, useRef, useState } from 'react'
+import './Hero.css'
 
 const heroImage = new URL('../assets/madam.png', import.meta.url).href
 const heroMusic = new URL('../assets/music/bramhandamanthaa_ringtone.mp3', import.meta.url).href
+
+// Soft golden / rose light orbs that drift upward behind the title. Computed
+// once at module load so the component stays pure.
+const BOKEH: React.CSSProperties[] = Array.from({ length: 22 }, (_, i) => {
+  const r = (n: number) => {
+    const x = Math.sin((i + 1) * 78.233 + n * 12.9898) * 43758.5453
+    return x - Math.floor(x)
+  }
+  const size = 10 + r(1) * 46
+  return {
+    left: `${r(2) < 0.5 ? r(2) * 52 : 74 + (r(2) - 0.5) * 52}%`,
+    width: size,
+    height: size,
+    animationDuration: `${16 + r(3) * 20}s`,
+    animationDelay: `${-r(4) * 30}s`,
+    background: i % 3 === 0 ? 'rgba(255, 183, 197, 0.55)' : 'rgba(255, 214, 140, 0.55)',
+  }
+})
 
 export function Hero() {
   const [isPlaying, setIsPlaying] = useState(false)
@@ -38,7 +57,7 @@ export function Hero() {
   }
 
   return (
-    <section className="hero" style={{ backgroundImage: `url(${heroImage})` }} aria-label="Welcome">
+    <section className="cinema-hero" aria-label="Welcome">
       <audio
         ref={musicRef}
         src={heroMusic}
@@ -47,26 +66,47 @@ export function Hero() {
         onPause={() => setIsPlaying(false)}
         onPlay={() => setIsPlaying(true)}
       />
-      <div className="hero-birthday">
-        <span>🎉</span>
-        Happy Birthday MADAM
-        <span>🌟</span>
+
+      <div className="cinema-bg" style={{ backgroundImage: `url(${heroImage})` }} />
+      <div className="cinema-shade" />
+
+      <div className="cinema-bokeh" aria-hidden="true">
+        {BOKEH.map((dot, index) => (
+          <span key={index} style={dot} />
+        ))}
       </div>
-      <div className="hero-quote-wrap">
-        <span className="hero-emoji">✨</span>
-        <div className="hero-quote">
-          "You're the person through whose eyes I've seen the world differently."
-        </div>
-        <span className="hero-emoji hero-emoji-end">🌙</span>
+
+      <div className="cinema-content">
+        <h1 className="cinema-title">Happy Birthday</h1>
+        <p className="cinema-name">
+          <i aria-hidden="true" />
+          MADAM
+          <i aria-hidden="true" />
+        </p>
+        <blockquote className="cinema-quote">
+          “You’re the person through whose eyes I’ve seen the world differently.”
+        </blockquote>
       </div>
+
       <button
-        className="music-toggle"
+        className={isPlaying ? 'cinema-music playing' : 'cinema-music'}
         type="button"
         onClick={toggleMusic}
         aria-label={isPlaying ? 'Pause music' : 'Resume music'}
         title={isPlaying ? 'Pause music' : 'Resume music'}
       >
-        {isPlaying ? '❚❚' : '▶'}
+        {isPlaying ? (
+          <span className="cinema-eq" aria-hidden="true">
+            <b />
+            <b />
+            <b />
+            <b />
+          </span>
+        ) : (
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path d="M8 5.5v13l11-6.5z" fill="currentColor" />
+          </svg>
+        )}
       </button>
     </section>
   )

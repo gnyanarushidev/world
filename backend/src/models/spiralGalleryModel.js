@@ -42,9 +42,14 @@ export async function downloadSpiralGalleryPhoto(fileName, thumbnailWidth = null
   // SVG and GIF are left alone (vector / possibly animated).
   const ext = path.extname(fileName).toLowerCase()
   if (thumbnailWidth && ext !== '.svg' && ext !== '.gif') {
-    return {
-      contentType: 'image/webp',
-      body: fs.createReadStream(await getThumbnailPath(filePath, thumbnailWidth)),
+    try {
+      return {
+        contentType: 'image/webp',
+        body: fs.createReadStream(await getThumbnailPath(filePath, thumbnailWidth)),
+      }
+    } catch (error) {
+      // Never fail a photo because resizing is unavailable: serve the original.
+      console.error(`Thumbnail unavailable for ${fileName}, serving original:`, error.message)
     }
   }
 

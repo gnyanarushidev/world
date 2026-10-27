@@ -69,6 +69,8 @@ interface PolaroidProps {
 
 function Polaroid({ url, index, onOpen }: PolaroidProps) {
   const [loaded, setLoaded] = useState(false)
+  // Small resized copy first; fall back to the original if that fails to load.
+  const [src, setSrc] = useState(() => thumb(url))
   const tilt = (rand(index) - 0.5) * 7
   const note = index % 3 === 1 ? NOTES[Math.floor(rand(index + 5) * NOTES.length)] : null
 
@@ -90,7 +92,8 @@ function Polaroid({ url, index, onOpen }: PolaroidProps) {
       <span className="memory-tape" aria-hidden="true" />
       <span className={loaded ? 'memory-photo loaded' : 'memory-photo'}>
         <img
-          src={thumb(url)}
+          src={src}
+          onError={() => setSrc((current) => (current === url ? current : url))}
           alt=""
           draggable={false}
           loading="lazy"

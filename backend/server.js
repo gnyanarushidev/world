@@ -14,5 +14,7 @@ app.listen(port, () => {
   void Promise.all([
     warmThumbnails(getAssetDir('image-orbit'), 512),
     warmThumbnails(getAssetDir('spiral'), 1024),
-  ]).then(([orbit, spiral]) => console.log(`Thumbnails ready (${orbit} orbit, ${spiral} spiral)`))
+  ])
+    .then(([orbit, spiral]) => console.log(`Thumbnails ready (${orbit} orbit, ${spiral} spiral)`))
+    .catch((error) => console.error('Thumbnail warm-up skipped:', error.message))
 })
