@@ -1,4 +1,4 @@
-# Our World frontend
+#World frontend
 
 The Vite app in the repository root is the frontend. It owns the Three.js scene,
 chapter navigation, memory interactions, and presentation layer.

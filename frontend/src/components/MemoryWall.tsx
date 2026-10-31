@@ -14,8 +14,6 @@ const NOTES = [
   'pure joy',
   'best memories',
   'always like this',
-  'you make it special',
-  'a little piece of home',
 ]
 const TAPES = ['#fbcfe8', '#fde68a', '#bfdbfe', '#c7f0d8', '#ddd6fe']
 // Same width the orbit gallery requests, so the browser reuses its cached copies.
@@ -201,11 +199,11 @@ export function MemoryWall() {
         <p className="memory-sub">
           {status === 'ready' && photos.length > 0
             ? `${photos.length} memories, pinned up just for you`
-            : 'Pinning up our memories…'}
+            : 'Pinning up your memories…'}
         </p>
       </header>
 
-      {status === 'loading' && <p className="memory-status">Gathering our memories ♥</p>}
+      {status === 'loading' && <p className="memory-status">Gathering your memories ♥</p>}
       {status === 'error' && (
         <div className="memory-status">
           <p>The memories could not be loaded.</p>
