@@ -1,0 +1,33 @@
+/* FeatureVideo – one silent video in a glowing frame. */
+.fv-section {
+  position: relative;
+  padding: 110px 20px 120px;
+  text-align: center;
+  color: #fff4eb;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 55%, rgba(255, 140, 180, 0.25), transparent 60%),
+    linear-gradient(180deg, #2a1020 0%, #3a1634 100%);
+}
+.fv-eyebrow { margin: 0 0 10px; font: 12px monospace; letter-spacing: 0.3em; text-transform: uppercase; color: #ff9cc9; }
+.fv-heading h2 { margin: 0 0 44px; font: 400 clamp(36px, 7vw, 76px)/1 Georgia, serif; letter-spacing: -0.02em; }
+.fv-heading h2 em { color: #ffd166; text-shadow: 0 0 26px rgba(255, 209, 102, 0.45); }
+
+.fv-frame {
+  position: relative; display: block; width: min(100%, 980px); margin: 0 auto; padding: 10px;
+  border: 0; border-radius: 22px; cursor: pointer; background: linear-gradient(135deg, #ffd166, #ff7ab8 55%, #a78bfa);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55), 0 0 80px rgba(255, 122, 184, 0.3);
+  transition: transform 0.4s ease;
+}
+.fv-frame:hover { transform: scale(1.015) rotate(-0.4deg); }
+.fv-frame:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }
+.fv-frame video { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 14px; background: #17091d; pointer-events: none; }
+
+.fv-glyph {
+  position: absolute; right: 26px; bottom: 26px; width: 48px; height: 48px; display: grid; place-items: center;
+  border-radius: 50%; color: #fff; background: rgba(26, 11, 34, 0.55); backdrop-filter: blur(6px);
+  font-size: 15px; opacity: 0; transition: opacity 0.25s;
+}
+.fv-frame:hover .fv-glyph, .fv-frame:focus-visible .fv-glyph, .fv-frame.is-paused .fv-glyph { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) { .fv-frame { transition: none; } }

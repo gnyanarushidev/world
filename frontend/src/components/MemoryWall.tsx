@@ -10,8 +10,6 @@ import './MemoryWall.css'
 
 const NOTES = [
   'my favourite smile',
-  'happy, with you',
-  'pure joy',
   'best memories',
   'always like this',
 ]

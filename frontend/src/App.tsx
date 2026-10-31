@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { Hero } from './components/Hero'
+import { FeatureVideo } from './components/FeatureVideo'
 import { SpiralGallery } from './components/SpiralGallery'
 import { ImageOrbitGallery } from './components/ImageOrbitGallery'
 import { MemoryWall } from './components/MemoryWall'
@@ -20,6 +21,7 @@ function App() {
   return (
     <>
       <Hero />
+      <FeatureVideo />
       <SpiralGallery />
       <ImageOrbitGallery />
       <MemoryWall />
