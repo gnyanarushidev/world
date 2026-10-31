@@ -3,6 +3,7 @@ import { Hero } from './components/Hero'
 import { FeatureVideo } from './components/FeatureVideo'
 import { SpiralGallery } from './components/SpiralGallery'
 import { ImageOrbitGallery } from './components/ImageOrbitGallery'
+import { MomentsReel } from './components/MomentsReel'
 import { MemoryWall } from './components/MemoryWall'
 import './App.css'
 
@@ -24,6 +25,7 @@ function App() {
       <FeatureVideo />
       <SpiralGallery />
       <ImageOrbitGallery />
+      <MomentsReel />
       <MemoryWall />
     </>
   )
