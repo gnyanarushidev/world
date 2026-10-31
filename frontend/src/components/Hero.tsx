@@ -77,8 +77,8 @@ export function Hero() {
         ref={musicRef}
         src={heroMusic}
         autoPlay
-        loop
         onPause={() => setIsPlaying(false)}
+        onEnded={() => setIsPlaying(false)}
         onPlay={() => setIsPlaying(true)}
       />
 
