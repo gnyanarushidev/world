@@ -39,6 +39,8 @@ const SPARKLES: React.CSSProperties[] = Array.from({ length: 16 }, (_, i) => {
 
 export function Hero() {
   const [isPlaying, setIsPlaying] = useState(false)
+  // Set when the browser refused autoplay: a tap-to-begin screen then starts the music.
+  const [needsTap, setNeedsTap] = useState(false)
   const musicRef = useRef<HTMLAudioElement>(null)
   // Tracks whether the user explicitly paused during this visit.
   // Resets on reload / re-mount so audio plays again on arrival.
@@ -48,10 +50,33 @@ export function Hero() {
     if (userPausedRef.current) return
     const music = musicRef.current
     if (!music) return
+
+    // Browsers block sound until the visitor has interacted with the page, so if
+    // autoplay is refused, start the music on their first tap, click or key press.
+    const gestures = ['pointerdown', 'keydown', 'touchend'] as const
+    const startOnGesture = () => {
+      if (userPausedRef.current) return stopWaiting()
+      void music
+        .play()
+        .then(() => {
+          setIsPlaying(true)
+          setNeedsTap(false)
+          stopWaiting()
+        })
+        .catch(() => undefined)
+    }
+    const stopWaiting = () => gestures.forEach((name) => window.removeEventListener(name, startOnGesture))
+
     void music
       .play()
       .then(() => setIsPlaying(true))
-      .catch(() => setIsPlaying(false))
+      .catch(() => {
+        setIsPlaying(false)
+        setNeedsTap(true)
+        gestures.forEach((name) => window.addEventListener(name, startOnGesture))
+      })
+
+    return stopWaiting
   }, [])
 
   const toggleMusic = () => {
@@ -81,6 +106,13 @@ export function Hero() {
         onPause={() => setIsPlaying(false)}
         onPlay={() => setIsPlaying(true)}
       />
+
+      {needsTap && (
+        <div className="cinema-gate" role="button" tabIndex={0} aria-label="Tap to begin with music">
+          <p>✦ tap anywhere to begin ✦</p>
+          <span>sound on, please</span>
+        </div>
+      )}
 
       <div className="cinema-bg" style={{ backgroundImage: `url(${heroImage})` }} />
       <div className="cinema-shade" />
